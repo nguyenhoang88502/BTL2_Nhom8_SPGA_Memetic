@@ -1,0 +1,9 @@
+Friedman (3 thuat toan, 10 seed): chi2=2.600, p=0.27253
+Wilcoxon GA-TS vs SPGA gốc: stat=16.0, p=0.27539, p_Holm=0.58008, GA-TS thang 7/10 seed
+Wilcoxon GA-SA vs SPGA gốc: stat=14.0, p=0.19336, p_Holm=0.58008, GA-SA thang 6/10 seed
+Wilcoxon GA-TS vs GA-SA: stat=19.0, p=0.43164, p_Holm=0.58008, GA-TS thang 7/10 seed
+So seed co Z cao nhat ca 3: SPGA gốc = 2/10
+So seed co Z cao nhat ca 3: GA-TS = 6/10
+So seed co Z cao nhat ca 3: GA-SA = 2/10
+Cai thien Z trung binh so voi SPGA gốc: GA-TS = +0.448%
+Cai thien Z trung binh so voi SPGA gốc: GA-SA = +0.367%

@@ -1,0 +1,409 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Demo SPGA, GA-TS, GA-SA – Nhóm 8</title>
+<style>
+:root{
+  --spga:#1F3A93; --ts:#E07B39; --sa:#2E8B57; --ts-ink:#B54E12; --sa-ink:#1E7B4A;
+  --bg:#F4F6FA; --card:#fff; --ink:#1d2433; --muted:#667085; --line:#e2e6ee; --red:#b00020; --soft:#eef2fb; --win:#FFF3C4;
+}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.35 "Segoe UI",system-ui,-apple-system,Roboto,Arial,sans-serif;
+  height:100vh;display:flex;flex-direction:column;gap:8px;padding:0 12px 10px;overflow:hidden}
+header{margin:0 -12px;background:var(--spga);color:#fff;padding:8px 16px;display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+h1{font-size:17px;margin:0;font-weight:600;margin-right:auto}
+form#f{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+form#f label{display:flex;align-items:center;gap:5px;font-size:13px}
+input,select{width:70px;padding:4px 6px;border:0;border-radius:5px;font:inherit;color:var(--ink);background:#fff}
+select{width:auto}
+input:disabled,select:disabled{opacity:.6}
+.ghost{background:transparent;color:#fff;border:1px solid rgba(255,255,255,.5);border-radius:6px;padding:5px 10px;font:inherit;cursor:pointer}
+#go{background:var(--ts);color:#fff;border:0;border-radius:6px;padding:7px 22px;font:600 15px "Segoe UI",system-ui,sans-serif;cursor:pointer;min-width:112px}
+#go.running{background:#fff;color:var(--ink)}
+.scores{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.score{background:var(--card);border:1px solid var(--line);border-left:5px solid var(--line);border-radius:8px;padding:6px 12px}
+.score.spga{border-left-color:var(--spga)} .score.ts{border-left-color:var(--ts)} .score.sa{border-left-color:var(--sa)}
+.score .k{font-size:12.5px;color:var(--muted)}
+.score .line{display:flex;align-items:baseline;gap:10px}
+.score .v{font-size:25px;font-weight:700;line-height:1.15}
+.score .d{font-size:14px;font-weight:600}
+.score .s{font-size:12px;color:var(--muted)}
+.bar{height:4px;background:#eceff5;border-radius:2px;margin-top:4px;overflow:hidden}
+.bar i{display:block;height:100%;width:0;background:var(--spga)}
+.ts .bar i{background:var(--ts)} .sa .bar i{background:var(--sa)}
+main{flex:1;min-height:0;display:grid;grid-template-columns:minmax(0,1.5fr) minmax(350px,1fr);gap:8px}
+.col{min-height:0;display:flex;flex-direction:column;gap:8px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:8px 12px;min-height:0;display:flex;flex-direction:column}
+.card h2{font-size:13.5px;margin:0;color:var(--spga);font-weight:600}
+.hint{font-size:12px;color:var(--muted);margin:0}
+.plot{position:relative;flex:1;min-height:0;margin-top:4px}
+.plot canvas{position:absolute;inset:0;width:100%;height:100%}
+#convCard{flex:1.3}
+#planCard{flex:1}
+.plans{flex:1;min-height:0;display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:2px}
+.plans>div{min-height:0;display:flex;flex-direction:column}
+.plans b{font-size:12.5px;font-weight:600}
+.plans .spga b{color:var(--spga)} .plans .ts b{color:var(--ts-ink)} .plans .sa b{color:var(--sa-ink)}
+table{border-collapse:collapse;width:100%;font-size:13px;margin-top:4px;font-variant-numeric:tabular-nums}
+th,td{padding:2.5px 6px;text-align:right;border-bottom:1px solid var(--line);white-space:nowrap}
+th:first-child,td:first-child{text-align:left;white-space:normal}
+thead th{font-weight:600}
+thead th.spga{color:var(--spga)} thead th.ts{color:var(--ts-ink)} thead th.sa{color:var(--sa-ink)}
+tr.sec td{background:var(--soft);color:var(--spga);font-weight:600;font-size:12px}
+td.win{background:var(--win);font-weight:700}
+#feedCard{flex:1}
+#feed{flex:1;min-height:0;overflow:hidden;margin:4px 0 0;padding:0;list-style:none;font-size:12.5px}
+#feed li{padding:2px 0;border-bottom:1px solid #f0f2f6;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#feed .ts{color:var(--ts-ink);font-weight:600}
+#feed .sa{color:var(--sa-ink);font-weight:600}
+#feed .blocked{color:var(--muted)}
+#feed .aspiration{font-weight:600}
+.err{color:var(--red)}
+dialog{border:0;border-radius:10px;padding:16px 20px;max-width:760px;width:calc(100% - 32px);color:var(--ink);box-shadow:0 12px 40px rgba(0,0,0,.25)}
+dialog::backdrop{background:rgba(20,30,60,.45)}
+dialog h2{margin:0 0 8px;font-size:16px;color:var(--spga)}
+dialog h3{margin:10px 0 2px;font-size:13.5px}
+dialog p,dialog li{font-size:13px;line-height:1.5;margin:2px 0}
+dialog ul{margin:2px 0;padding-left:18px}
+dialog .grid{display:grid;grid-template-columns:1fr 80px;gap:6px 10px;align-items:center;font-size:13px}
+dialog .grid input{border:1px solid #cdd3df;width:100%}
+dialog .grid h3{grid-column:1/3;margin:6px 0 0}
+dialog .close{margin-top:12px;background:var(--spga);color:#fff;border:0;border-radius:6px;padding:6px 16px;font:inherit;cursor:pointer}
+@media(max-width:900px),(max-height:520px){
+  body{height:auto;overflow:auto}
+  main{grid-template-columns:minmax(0,1fr)}
+  .scores{grid-template-columns:1fr}
+  #convCard .plot,.plans .plot{height:200px;flex:none}
+  #feed{max-height:180px}
+}
+</style>
+</head>
+<body>
+<header>
+  <h1>SPGA gốc, GA-TS, GA-SA <span style="font-weight:400;opacity:.8">· Nhóm 8</span></h1>
+  <form id="f" novalidate>
+    <label>Chạy
+      <select name="mode"><option value="all">Cả ba</option><option value="spga">SPGA gốc</option><option value="ts">GA-TS</option><option value="sa">GA-SA</option></select>
+    </label>
+    <label>Seed <input name="seed" type="number" style="width:54px"></label>
+    <label>Lần đánh giá
+      <select name="budget"><option value="600">600 (nhanh)</option><option value="2000">2000</option><option value="6000">6000 (chuẩn)</option></select>
+    </label>
+    <label title="Mức ngại rủi ro, từ 0 đến 1">k <input name="k" type="number" step="0.1" min="0" max="1" style="width:54px"></label>
+    <label title="Độ lệch nhu cầu">σ <input name="sigma" type="number" step="1000" min="0"></label>
+    <button class="ghost" type="button" id="openLs">Tìm kiếm cục bộ</button>
+    <button class="ghost" type="button" id="openHow">Cách hoạt động</button>
+    <button id="go" type="submit">▶ Chạy</button>
+  </form>
+</header>
+
+<section class="scores">
+  <div class="score spga"><div class="k">SPGA gốc · Z tốt nhất</div>
+    <div class="line"><span class="v" id="z_spga">–</span></div>
+    <div class="s" id="sub_spga">Chưa chạy</div><div class="bar"><i id="bar_spga"></i></div></div>
+  <div class="score ts"><div class="k">GA-TS · Z tốt nhất</div>
+    <div class="line"><span class="v" id="z_ts">–</span><span class="d" id="d_ts"></span></div>
+    <div class="s" id="sub_ts">Chưa chạy</div><div class="bar"><i id="bar_ts"></i></div></div>
+  <div class="score sa"><div class="k">GA-SA · Z tốt nhất</div>
+    <div class="line"><span class="v" id="z_sa">–</span><span class="d" id="d_sa"></span></div>
+    <div class="s" id="sub_sa">Chưa chạy</div><div class="bar"><i id="bar_sa"></i></div></div>
+</section>
+
+<main>
+  <div class="col">
+    <div class="card" id="convCard">
+      <h2 id="convTitle">Hội tụ: Z tốt nhất theo số lần đánh giá</h2>
+      <p class="hint" id="convHint">Đường càng cao càng tốt. Chấm tròn là lúc tìm kiếm cục bộ chạy.</p>
+      <div class="plot"><canvas id="cConv"></canvas></div>
+    </div>
+    <div class="card" id="planCard">
+      <h2>Phương án tốt nhất: số tester mỗi quý</h2>
+      <p class="hint">Màu đậm là máy mua, màu nhạt là máy thuê, đường đen là nhu cầu trung bình.</p>
+      <div class="plans">
+        <div class="spga"><b>SPGA gốc</b><div class="plot"><canvas id="cPlan_spga"></canvas></div></div>
+        <div class="ts"><b>GA-TS</b><div class="plot"><canvas id="cPlan_ts"></canvas></div></div>
+        <div class="sa"><b>GA-SA</b><div class="plot"><canvas id="cPlan_sa"></canvas></div></div>
+      </div>
+    </div>
+  </div>
+  <div class="col">
+    <div class="card">
+      <h2>Bảng so sánh</h2>
+      <table>
+        <thead><tr><th>Chỉ số</th><th class="spga">SPGA</th><th class="ts">GA-TS</th><th class="sa">GA-SA</th></tr></thead>
+        <tbody id="tb"></tbody>
+      </table>
+      <p class="hint" id="statLine" style="margin-top:4px"></p>
+    </div>
+    <div class="card" id="feedCard">
+      <h2>Tìm kiếm cục bộ đang làm gì</h2>
+      <ul id="feed"><li class="hint">Bấm ▶ Chạy để xem từng bước của Tabu Search và Simulated Annealing.</li></ul>
+    </div>
+  </div>
+</main>
+
+<dialog id="lsDialog">
+  <h2>Tham số tìm kiếm cục bộ</h2>
+  <p class="hint" style="margin-bottom:8px">Giá trị mặc định là cấu hình của thực nghiệm chính. GA-TS và GA-SA dùng chung điểm kích hoạt.</p>
+  <div class="grid">
+    <h3>Dùng chung</h3>
+    <label for="ls_freq">Chạy mỗi … thế hệ</label><input id="ls_freq" form="f" name="ls_freq" type="number" min="1">
+    <label for="ls_top">Số cá thể tốt nhất</label><input id="ls_top" form="f" name="ls_top" type="number" min="1">
+    <label for="ls_max">Tối đa lần đánh giá / cá thể</label><input id="ls_max" form="f" name="ls_max" type="number" min="1">
+    <h3>GA-TS</h3>
+    <label for="ts_n_cand">Số ứng viên mỗi vòng (n_cand)</label><input id="ts_n_cand" form="f" name="ts_n_cand" type="number" min="1">
+    <label for="ts_tenure">Số vòng bước ngược bị cấm (tenure)</label><input id="ts_tenure" form="f" name="ts_tenure" type="number" min="0">
+    <h3>GA-SA</h3>
+    <label for="sa_p0">Xác suất nhận bước tệ ban đầu (p0)</label><input id="sa_p0" form="f" name="sa_p0" type="number" step="0.1" min="0.01" max="0.99">
+  </div>
+  <button class="close" type="button">Đóng</button>
+</dialog>
+
+<dialog id="howDialog">
+  <h2>Cách hoạt động</h2>
+  <p>Bài toán: chọn danh mục máy kiểm thử (3 tester, 4 handler) và phân bổ sản lượng cho 3 sản phẩm trong 8 quý. Mỗi phương án được chấm trên 30 kịch bản nhu cầu bằng <b>Z = (1−k)·lợi nhuận trung bình − k·MAD</b>.</p>
+  <h3 style="color:var(--spga)">SPGA gốc</h3>
+  <p>GA thuần: quần thể 30, chọn lọc tournament 2, lai ghép hybrid (pc 0,9), đột biến uniform (pm 0,05), giữ 1 cá thể tốt nhất.</p>
+  <h3 style="color:var(--ts-ink)">GA-TS: GA + Tabu Search</h3>
+  <ul>
+    <li>Mỗi vòng bốc 5 bước lân cận hợp lệ, đánh giá cả 5, rồi đi tới bước tốt nhất không bị cấm, kể cả khi bước đó tệ hơn nghiệm hiện tại.</li>
+    <li>Bước ngược của bước vừa đi bị cấm trong 7 vòng. Aspiration: bước bị cấm vẫn được đi nếu vượt Z tốt nhất từ trước tới giờ.</li>
+    <li>Điểm mới: một danh sách tabu dùng chung cho 3 cá thể trong cùng thế hệ, reset ở mỗi lần kích hoạt.</li>
+  </ul>
+  <h3 style="color:var(--sa-ink)">GA-SA: GA + Simulated Annealing</h3>
+  <ul>
+    <li>Mỗi vòng bốc 1 bước hợp lệ. Nhận nếu không tệ hơn, hoặc với xác suất exp(Δ/T).</li>
+    <li>T0 ước lượng một lần từ 30 bước ngẫu nhiên, sao cho bước tệ điển hình được nhận 50% lúc đầu. 30 lần này tính vào ngân sách.</li>
+    <li>Làm nguội theo cấp số nhân, đến lần đánh giá cuối thì T = 0,01·T0.</li>
+  </ul>
+  <h3>So sánh công bằng</h3>
+  <p>Cả ba dùng chung tham số GA, 6000 lần đánh giá (tính cả tìm kiếm cục bộ), 30 kịch bản và seed 1 đến 10. GA-TS và GA-SA cùng kích hoạt mỗi 10 thế hệ cho 3 cá thể tốt nhất, tối đa 20 lần đánh giá mỗi cá thể, cùng 174 bước lân cận, và cùng ghi vào quần thể nghiệm tốt nhất gặp được nên không bao giờ làm tệ cá thể.</p>
+  <button class="close" type="button">Đóng</button>
+</dialog>
+
+<script>
+"use strict";
+const C = {spga:"#1F3A93", spgaSoft:"#8FA3D9", ts:"#E07B39", tsSoft:"#F2B48A", sa:"#2E8B57", saSoft:"#9CCFB2",
+  grid:"#e6e9f0", ink:"#1d2433", muted:"#667085"};
+const INK = {spga:"#1F3A93", ts:"#B54E12", sa:"#1E7B4A"};
+const NAME = {spga:"SPGA", ts:"GA-TS", sa:"GA-SA"};
+const ALGOS = ["spga","ts","sa"];
+const LABEL = {spga:"SPGA gốc", ts:"GA-TS", sa:"GA-SA"};
+const PARAMS = ["mode","seed","budget","k","sigma","ls_freq","ls_top","ls_max","ts_n_cand","ts_tenure","sa_p0"];
+const $ = s => document.querySelector(s);
+const fmt = (v, d=2) => (v==null||!isFinite(v)) ? "–" : v.toLocaleString("vi-VN",{minimumFractionDigits:d,maximumFractionDigits:d});
+const signed = (v, d=2) => (v==null||!isFinite(v)) ? "–" : (v>=0?"+":"") + fmt(v,d);
+
+// ------------------------------------------------------------- canvas helpers
+function prep(cv){
+  const r = window.devicePixelRatio||1, w = cv.clientWidth, h = cv.clientHeight;
+  if (cv.width!==Math.round(w*r) || cv.height!==Math.round(h*r)){ cv.width=Math.round(w*r); cv.height=Math.round(h*r); }
+  const g = cv.getContext("2d"); g.setTransform(r,0,0,r,0,0); g.clearRect(0,0,w,h);
+  g.font="11px Segoe UI, system-ui, sans-serif"; return [g,w,h];
+}
+function niceTicks(lo, hi, n=4){
+  if (!(hi>lo)) hi = lo + 1;
+  const step0 = (hi-lo)/n, mag = Math.pow(10, Math.floor(Math.log10(step0)));
+  const step = [1,2,2.5,5,10].map(m=>m*mag).find(s=>s>=step0) || 10*mag;
+  const t=[]; for(let v=Math.ceil(lo/step)*step; v<=hi+1e-9; v+=step) t.push(+v.toFixed(10)); return t;
+}
+function empty(g,w,h,msg){ g.fillStyle=C.muted; g.textAlign="center"; g.textBaseline="middle"; g.font="13px Segoe UI, sans-serif"; g.fillText(msg,w/2,h/2); }
+function yGrid(g,w,pad,Y,lo,hi,d){
+  g.strokeStyle=C.grid; g.fillStyle=C.muted; g.lineWidth=1; g.textAlign="right"; g.textBaseline="middle";
+  for (const t of niceTicks(lo,hi)){ g.beginPath(); g.moveTo(pad.l,Y(t)); g.lineTo(w-pad.r,Y(t)); g.stroke(); g.fillText(fmt(t,d),pad.l-5,Y(t)); }
+}
+
+// ------------------------------------------------------------- state
+let S = null, es = null, defaults = {}, budget = 6000, RES = null;
+const freshAlgo = () => ({hist:[], plan:null, lsMarks:[], done:null, best:null, evals:0, gen:0, steps:0, worse:0, aspiration:0, blocked:0});
+
+// ------------------------------------------------------------- charts
+function drawConv(){
+  const [g,w,h] = prep($("#cConv"));
+  // Chưa chạy thì hiện đường trung bình đã lưu, để màn hình không trống.
+  let series = null, xMax = budget;
+  if (S) series = S.algos.map(a => ({a, pts:S.a[a].hist, step:true, marks:S.a[a].lsMarks}));
+  else if (RES?.curves){
+    series = ALGOS.filter(a=>RES.curves[LABEL[a]]).map(a => ({a, pts:RES.curves[LABEL[a]].map((v,i)=>[RES.curves.grid[i],v]), marks:[]}));
+    xMax = RES.curves.grid[RES.curves.grid.length-1];
+  }
+  if (!series || !series.some(s=>s.pts.length)) return empty(g,w,h,"Bấm ▶ Chạy để bắt đầu");
+  const all = series.flatMap(s=>s.pts.map(p=>p[1])).sort((x,y)=>x-y);
+  let lo = all[Math.floor(all.length*0.05)], hi = all[all.length-1];
+  const m = (hi-lo)*0.08||0.5; lo-=m; hi+=m;
+  const pad = {l:44,r:100,t:6,b:20};
+  const X = v => pad.l + v/(xMax||1)*(w-pad.l-pad.r), Y = v => h-pad.b-(v-lo)/(hi-lo)*(h-pad.t-pad.b);
+  yGrid(g,w,pad,Y,lo,hi,Math.abs(hi-lo)<5?1:0);
+  g.fillStyle=C.muted; g.textAlign="center"; g.textBaseline="top";
+  for (const t of niceTicks(0,xMax,5)) g.fillText(fmt(t,0),X(t),h-pad.b+4);
+  g.save(); g.beginPath(); g.rect(pad.l,pad.t,w-pad.l-pad.r+2,h-pad.t-pad.b); g.clip();
+  for (const s of series){
+    if (!s.pts.length) continue;
+    g.strokeStyle=C[s.a]; g.lineWidth=2.2; g.beginPath();
+    s.pts.forEach(([n,f],i)=>{ if(!i) g.moveTo(X(n),Y(f)); else { if(s.step) g.lineTo(X(n),Y(s.pts[i-1][1])); g.lineTo(X(n),Y(f)); } });
+    g.stroke();
+    g.fillStyle=C[s.a];
+    for (const [n,f] of s.marks){ g.beginPath(); g.arc(X(n),Y(f),2.6,0,7); g.fill(); }
+  }
+  g.restore();
+  // Ghi nhãn ngay cuối đường, khỏi phải dò chú thích; các nhãn gần nhau thì đẩy ra.
+  const ends = series.filter(s=>s.pts.length).map(s=>{ const p=s.pts[s.pts.length-1]; return {a:s.a, x:X(p[0]), y:Y(p[1]), v:p[1]}; }).sort((p,q)=>p.y-q.y);
+  const gap = 28, top = pad.t+12, bottom = h-pad.b-12;
+  for (let i=1;i<ends.length;i++) ends[i].y = Math.max(ends[i].y, ends[i-1].y+gap);
+  const over = ends.length ? ends[ends.length-1].y-bottom : 0;
+  if (over>0) ends.forEach(e=>e.y-=over);
+  if (ends.length && ends[0].y<top){ const shift=top-ends[0].y; ends.forEach(e=>e.y+=shift); }
+  g.font="600 12px Segoe UI, system-ui, sans-serif"; g.textAlign="left"; g.textBaseline="middle";
+  for (const e of ends){ g.fillStyle=INK[e.a]; g.fillText(NAME[e.a],e.x+6,e.y-7); g.fillText(fmt(e.v)+" tr",e.x+6,e.y+7); }
+}
+function drawPlan(a){
+  const [g,w,h] = prep($("#cPlan_"+a)), P = S?.a[a].plan;
+  if (S && !S.algos.includes(a)) return empty(g,w,h,"Không chạy");
+  if (!P) return empty(g,w,h,"Chưa có phương án");
+  // Các biểu đồ dùng chung trục Y để so sánh trực tiếp.
+  const plans = S.algos.map(x=>S.a[x].plan).filter(Boolean);
+  const hi = Math.max(...plans.flatMap(p=>[...p.owned.map((o,i)=>o+p.rented[i]), ...p.need]))*1.1||1;
+  const pad = {l:24,r:2,t:4,b:18}, Y = v => h-pad.b-v/hi*(h-pad.t-pad.b);
+  yGrid(g,w,pad,Y,0,hi,0);
+  const n = P.owned.length, bw = (w-pad.l-pad.r)/n;
+  for (let i=0;i<n;i++){
+    const x = pad.l+i*bw+bw*0.15, ww = bw*0.7;
+    g.fillStyle=C[a]; g.fillRect(x,Y(P.owned[i]),ww,Y(0)-Y(P.owned[i]));
+    g.fillStyle=C[a+"Soft"]; g.fillRect(x,Y(P.owned[i]+P.rented[i]),ww,Y(P.owned[i])-Y(P.owned[i]+P.rented[i]));
+    g.fillStyle=C.muted; g.textAlign="center"; g.textBaseline="top"; g.fillText(String(i+1),x+ww/2,h-pad.b+3);
+  }
+  g.strokeStyle=C.ink; g.lineWidth=2; g.beginPath();
+  P.need.forEach((v,i)=>{ const x=pad.l+i*bw+bw/2; i?g.lineTo(x,Y(v)):g.moveTo(x,Y(v)); }); g.stroke();
+}
+function redraw(){ drawConv(); ALGOS.forEach(drawPlan); }
+new ResizeObserver(redraw).observe(document.body);
+
+// ------------------------------------------------------------- điểm số + bảng
+function bestAtEvals(st, n){ let v=null; for(const [e,f] of st.hist){ if(e<=n) v=f; else break; } return v; }
+function updateScores(){
+  for (const a of ALGOS){
+    const st = S.a[a], on = S.algos.includes(a);
+    $("#z_"+a).textContent = on && st.best!=null ? fmt(st.best)+" tr" : "–";
+    $("#sub_"+a).textContent = !on ? "Không chạy" : st.done ? `Xong · ${st.gen} thế hệ · ${fmt(st.done.runtime,1)} giây` : `Thế hệ ${st.gen} · ${st.evals}/${budget} lần đánh giá`;
+    $("#bar_"+a).style.width = on ? Math.min(100,100*st.evals/budget)+"%" : "0";
+  }
+  // So tại cùng số lần đánh giá, vì ba thuật toán tiến với tốc độ khác nhau.
+  for (const a of ["ts","sa"]){
+    const el = $("#d_"+a); el.textContent = "";
+    if (!S.algos.includes(a) || !S.algos.includes("spga")) continue;
+    const n = Math.min(S.a.spga.evals, S.a[a].evals), fa = bestAtEvals(S.a.spga,n), fb = bestAtEvals(S.a[a],n);
+    if (fa==null || fb==null) continue;
+    const d = fb-fa;
+    el.textContent = `${signed(d)} tr so với gốc (${signed(100*d/Math.abs(fa))}%)`;
+    el.style.color = d>=0 ? INK.sa : "var(--red)";
+  }
+}
+// dir: +1 = càng cao càng tốt, -1 = càng thấp càng tốt, 0 = không so
+function row(label, vals, d, dir){
+  const nums = vals.filter(v=>v!=null && isFinite(v));
+  const best = dir && nums.length>1 ? (dir>0?Math.max(...nums):Math.min(...nums)) : null;
+  const cells = vals.map(v=>`<td class="${best!=null && v!=null && v.toFixed(d)===best.toFixed(d) ? "win":""}">${fmt(v,d)}</td>`).join("");
+  return `<tr><td>${label}</td>${cells}</tr>`;
+}
+function renderTable(){
+  const on = a => S && S.algos.includes(a);
+  const pick = f => ALGOS.map(a => on(a) ? f(S.a[a]) : null);
+  const sum = xs => xs ? xs.reduce((x,y)=>x+y,0) : null;
+  let html = '<tr class="sec"><td colspan="4">Lần chạy này</td></tr>';
+  html += row("Z tốt nhất (triệu)", pick(s=>s.best), 2, 1);
+  html += row("Lợi nhuận TB (triệu)", pick(s=>s.plan?.mean), 2, 1);
+  html += row("Rủi ro MAD (triệu)", pick(s=>s.plan?.mad), 2, -1);
+  html += row("Tester mua (máy)", pick(s=>sum(s.plan?.K_m)), 0, 0);
+  html += row("Tester thuê (máy·quý)", pick(s=>sum(s.plan?.rented)), 0, 0);
+  html += row("Bước tệ hơn đã đi", ALGOS.map(a => on(a)&&a!=="spga" ? S.a[a].worse : null), 0, 0);
+  if (RES?.available && RES.summary && ALGOS.every(a=>RES.summary[LABEL[a]])){
+    const m = a => RES.summary[LABEL[a]], n = m("spga").n;
+    html += `<tr class="sec"><td colspan="4">Thực nghiệm đã lưu (${n} seed)</td></tr>`;
+    html += row("Z trung bình (triệu)", ALGOS.map(a=>m(a).fitness_mean), 2, 1);
+    html += row("Độ lệch chuẩn (triệu)", ALGOS.map(a=>m(a).fitness_std), 2, -1);
+    html += row("Z trên kịch bản kiểm tra", ALGOS.map(a=>m(a).test_mean), 2, 1);
+  }
+  $("#tb").innerHTML = html;
+}
+function renderStatLine(){
+  const t = RES?.stats; if (!t) return;
+  const fr = t.match(/Friedman.*?p=([\d.]+)/);
+  const holm = (a,b) => t.match(new RegExp(`Wilcoxon ${a} vs ${b}:.*?p_Holm=([\\d.]+)`));
+  const parts = [];
+  if (fr) parts.push(`Friedman p = ${fmt(+fr[1],3)}`);
+  const ts = holm("GA-TS","SPGA gốc"), sa = holm("GA-SA","SPGA gốc"), tsa = holm("GA-TS","GA-SA");
+  if (ts) parts.push(`TS vs gốc p = ${fmt(+ts[1],3)}`);
+  if (sa) parts.push(`SA vs gốc p = ${fmt(+sa[1],3)}`);
+  if (tsa) parts.push(`TS vs SA p = ${fmt(+tsa[1],3)}`);
+  $("#statLine").textContent = parts.length ? "Wilcoxon-Holm · " + parts.join(" · ") : "";
+}
+function addFeed(d){
+  const box = $("#feed"); if (box.querySelector(".hint")) box.innerHTML = "";
+  const lines = [];
+  for (const e of d.ls){
+    for (const s of e.steps) lines.push(`<li class="${s.kind}"><span class="${d.algo}">${NAME[d.algo]}</span> · TH ${d.gen} · hạng ${e.rank}: ${s.msg.replace(/(\d)\.(\d)/g,"$1,$2")}</li>`);
+  }
+  box.insertAdjacentHTML("afterbegin", lines.reverse().join(""));
+  while (box.children.length>40) box.lastChild.remove();
+}
+
+// ------------------------------------------------------------- chạy
+const form = $("#f");
+function running(on){
+  $("#go").textContent = on ? "■ Dừng" : "▶ Chạy"; $("#go").classList.toggle("running",on);
+  [...form.elements].filter(x=>x.name).forEach(x=>x.disabled=on);
+}
+function stop(){ if(es){ es.close(); es=null; } running(false); }
+function start(){
+  const q = new URLSearchParams(defaults);
+  for (const k of PARAMS) if (form.elements[k].value!=="") q.set(k, form.elements[k].value);
+  budget = +q.get("budget");
+  $("#convTitle").textContent = "Hội tụ của lần chạy này";
+  $("#convHint").textContent = "Đường càng cao càng tốt. Chấm tròn là lúc tìm kiếm cục bộ chạy.";
+  $("#feed").innerHTML = '<li class="hint">Đang chờ lần tìm kiếm cục bộ đầu tiên…</li>';
+  S = {algos:[], a:{spga:freshAlgo(), ts:freshAlgo(), sa:freshAlgo()}};
+  running(true); renderTable(); redraw();
+  es = new EventSource("/api/run?"+q.toString());
+  es.addEventListener("start", e => { S.algos = JSON.parse(e.data).algos; updateScores(); renderTable(); redraw(); });
+  es.addEventListener("gen", e => {
+    const d = JSON.parse(e.data), st = S.a[d.algo];
+    st.gen=d.gen; st.evals=d.evals; st.best=d.best;
+    const last = st.hist[st.hist.length-1];
+    if (!last || last[1]!==d.best || d.evals-last[0]>budget/100) st.hist.push([d.evals,d.best]);
+    if (d.plan) st.plan = d.plan;
+    if (d.ls.length){
+      st.lsMarks.push([d.evals,d.best]);
+      for (const l of d.ls){ st.steps+=l.n_steps; st.worse+=l.n_worse; st.aspiration+=l.n_aspiration; st.blocked+=l.n_blocked; }
+      addFeed(d);
+    }
+    updateScores(); renderTable(); redraw();
+  });
+  es.addEventListener("done", e => {
+    const d = JSON.parse(e.data);
+    for (const a of Object.keys(d)){ S.a[a].done=d[a]; S.a[a].hist.push([d[a].evals,d[a].best]); }
+    stop(); updateScores(); renderTable(); redraw();
+  });
+  es.onerror = () => { if(!es) return; stop();
+    $("#statLine").innerHTML = '<span class="err">Mất kết nối server, hoặc đang có lần chạy khác. Thử lại sau vài giây.</span>'; };
+}
+form.onsubmit = ev => { ev.preventDefault(); es ? stop() : start(); };
+$("#openLs").onclick = () => $("#lsDialog").showModal();
+$("#openHow").onclick = () => $("#howDialog").showModal();
+document.querySelectorAll("dialog .close").forEach(b => b.onclick = () => b.closest("dialog").close());
+
+// ------------------------------------------------------------- khởi động
+(async()=>{
+  try { defaults = await (await fetch("/api/defaults")).json(); }
+  catch(e){ $("#statLine").innerHTML = '<span class="err">Không kết nối được server. Hãy mở bằng CHAY_DEMO.bat.</span>'; return; }
+  for (const k of PARAMS) form.elements[k].value = defaults[k];
+  budget = defaults.budget;
+  try { RES = await (await fetch("/api/results")).json(); } catch(e){ RES = null; }
+  if (RES?.curves){ $("#convTitle").textContent = "Hội tụ trung bình của thực nghiệm đã lưu"; $("#convHint").textContent = "Bấm ▶ Chạy để xem ba thuật toán chạy trực tiếp."; }
+  renderStatLine(); renderTable(); redraw();
+})();
+</script>
+</body>
+</html>

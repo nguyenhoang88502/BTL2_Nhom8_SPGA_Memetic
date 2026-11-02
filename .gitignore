@@ -1,0 +1,9 @@
+__pycache__/
+*.pyc
+.claude/
+
+# bản sao lưu và tài liệu ngoài code
+output_memetic_cu/
+Claude outputs/
+Ket_qua_demo.png
+output/run_log.txt
