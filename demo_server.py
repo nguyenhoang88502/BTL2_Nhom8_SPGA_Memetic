@@ -1,5 +1,5 @@
 """
-demo_server.py - server nhỏ cho bản demo HTML (Nhóm 8 - SPGA vs Memetic SPGA).
+demo_server.py - server nhỏ cho bản demo HTML (Nhóm 8 - SPGA gốc, GA-TS, GA-SA, GA-LP).
 
 Chạy:  python demo_server.py [--port 8765]
 Mở:    http://localhost:8765
@@ -10,8 +10,12 @@ API:
   GET /api/run?...       -> chạy thuật toán, gửi từng thế hệ (Server-Sent Events)
   GET /api/results       -> kết quả thực nghiệm đã lưu trong output/
   GET /api/rerun         -> chạy lại main.py --quick, gửi log (Server-Sent Events)
+  GET/POST /api/run-benchmark -> kiểm định lặp nhiều seed (SSE), tự động chạy MILP nền
+  GET /api/sensitivity   -> phân tích độ nhạy k × σ (SSE)
+  GET/POST /api/export-excel -> tải báo cáo Excel 1 sheet
+  GET/POST /api/milp, GET /api/milp/status -> cận tối ưu toàn cục MILP (chạy nền)
   GET /output/<file>     -> hình trong output/
-Chỉ dùng thư viện chuẩn + numpy (main.py khi chạy lại cần thêm scipy, pandas, matplotlib).
+Server chuẩn + numpy; exporter cần scipy/pandas/matplotlib/openpyxl; MILP cần pulp.
 """
 import argparse
 import csv
@@ -32,24 +36,28 @@ sys.path.insert(0, HERE)
 import model as mdl  # noqa: E402
 import ga  # noqa: E402
 import exporter  # noqa: E402
+import milp_solver  # noqa: E402
+import matheuristics  # noqa: E402
 
 DEFAULT_MODEL = dict(K_RISK=mdl.K_RISK, SIGMA=mdl.SIGMA, MU=mdl.MU.copy())
 RUN_LOCK = threading.Lock()
-# Kết quả kiểm định lặp / phân tích độ nhạy được cache lại để /api/export_excel và
-# /api/charts/generate đọc mà không phải chạy lại.
+# Kết quả kiểm định lặp / độ nhạy / MILP được cache lại để export và UI đọc lại không cần chạy lại.
 BENCHMARK_CACHE = {}
 SENSITIVITY_CACHE = {}
 SENSITIVITY_METRICS = {}
+MILP_CACHE = {}
+MILP_THREAD = None
 
 # ---------------------------------------------------------------- log ra terminal (cho người xem demo)
 if os.name == "nt":
     os.system("")  # bật màu ANSI trên cửa sổ PowerShell/cmd của Windows 10/11
-COL = {"spga": "\033[94m", "ts": "\033[93m", "sa": "\033[92m", "ok": "\033[92m", "dim": "\033[90m",
-       "head": "\033[96m", "bold": "\033[1m", "end": "\033[0m"}
-TAG = {"spga": "SPGA ", "ts": "GA-TS", "sa": "GA-SA"}
-LS_METHOD = {"spga": "none", "ts": "tabu", "sa": "sa"}
-MODES = {"all": ("spga", "ts", "sa"), "spga": ("spga",), "ts": ("ts",), "sa": ("sa",)}
-FULL_LABEL = {"spga": "SPGA gốc", "ts": "GA-TS", "sa": "GA-SA"}
+COL = {"spga": "\033[94m", "ts": "\033[93m", "sa": "\033[92m", "ml": "\033[95m",
+       "ok": "\033[92m", "dim": "\033[90m", "head": "\033[96m", "bold": "\033[1m", "end": "\033[0m"}
+TAG = {"spga": "SPGA ", "ts": "GA-TS", "sa": "GA-SA", "ml": "GA-LP"}
+LS_METHOD = {"spga": "none", "ts": "tabu", "sa": "sa", "ml": "none"}
+MODES = {"all": ("spga", "ts", "sa", "ml"), "spga": ("spga",), "ts": ("ts",),
+         "sa": ("sa",), "ml": ("ml",)}
+FULL_LABEL = {"spga": "SPGA gốc", "ts": "GA-TS", "sa": "GA-SA", "ml": "Matheuristics (GA-LP)"}
 
 
 def log(msg, col=None):
@@ -69,7 +77,7 @@ DEFAULTS = {
     "seed": 1, "mode": "all", "delay": 30,
     "n_runs": 10, "sens_k_min": 0.0, "sens_k_max": 1.0, "sens_k_steps": 5,
     "sens_sigma_min": 1000, "sens_sigma_max": 15000, "sens_sigma_steps": 5,
-    "sens_budget": 2000, "sens_runs": 1,
+    "sens_budget": 2000, "sens_runs": 1, "alpha": 0.05, "time_limit": 120,
 }
 
 
@@ -136,6 +144,49 @@ def _resample(hist, grid):
     return f[idx].tolist()
 
 
+def _plan_for(algo, best_x, scen, ev_ml):
+    """Phương án tốt nhất dạng 135 gen để vẽ biểu đồ. GA-LP (63 gen) được chuyển
+    qua dict máy + sản lượng tối ưu từ LP rồi encode lại."""
+    if algo == "ml" and ev_ml is not None:
+        return plan_summary(mdl.encode(ev_ml.plan_dict(best_x)), scen)
+    return plan_summary(best_x, scen)
+
+
+def milp_launch(k, sigma, mu, n_scen, scen_seed, time_limit=None):
+    """Khởi động MILP nền (KHÔNG giữ RUN_LOCK): dùng snapshot tham số riêng nên chạy
+    song song an toàn với các lần chạy GA. Bỏ qua nếu đã có kết quả cùng tham số."""
+    global MILP_THREAD
+    if MILP_THREAD is not None and MILP_THREAD.is_alive():
+        return
+    tl = max(int(time_limit or 120), 20)
+    m = MILP_CACHE
+    if (m and "error" not in m and abs(float(m.get("k", -1)) - k) < 1e-9
+            and abs(float(m.get("sigma", -1)) - sigma) < 1e-6
+            and m.get("n_scen") == n_scen and m.get("scen_seed") == scen_seed):
+        return
+    mu_snap = [float(v) for v in mu]
+
+    def worker():
+        global MILP_THREAD
+        try:
+            log(f"TÍNH CẬN TỐI ƯU MILP (CBC, tối đa {tl}s, {n_scen} kịch bản)...", "head")
+            res = milp_solver.solve_milp_exact(k=k, sigma=sigma, n_scen=n_scen,
+                                               scen_seed=scen_seed, time_limit=tl, mu=mu_snap)
+            MILP_CACHE.clear()
+            MILP_CACHE.update(res)
+            log(f"  MILP: Z_opt = {res['z_opt'] / 1e6:.3f} tr (status {res['status']}, {res['solve_time_s']:.1f}s)", "ok")
+        except Exception as e:
+            log(f"  MILP lỗi: {e}", "bold")
+            MILP_CACHE.clear()
+            MILP_CACHE.update({"error": str(e), "k": k, "sigma": sigma,
+                               "n_scen": n_scen, "scen_seed": scen_seed})
+        finally:
+            MILP_THREAD = None
+
+    MILP_THREAD = threading.Thread(target=worker, daemon=True)
+    MILP_THREAD.start()
+
+
 class Handler(BaseHTTPRequestHandler):
     def log_message(self, fmt, *args):  # yên lặng
         pass
@@ -190,18 +241,34 @@ class Handler(BaseHTTPRequestHandler):
             return self.send_json(load_results())
         if u.path == "/api/rerun":
             return self.rerun()
-        if u.path == "/api/benchmark":
+        if u.path in ("/api/benchmark", "/api/run-benchmark"):
             return self.benchmark(q)
+        if u.path == "/api/benchmark/run":
+            return self.benchmark_run(q)
         if u.path == "/api/sensitivity":
             return self.sensitivity(q)
-        if u.path == "/api/export_excel":
+        if u.path in ("/api/export_excel", "/api/export-excel"):
             return self.export_excel(q)
-        if u.path == "/api/charts/generate":
-            return self.charts_generate(q)
+        if u.path == "/api/milp":
+            return self.milp_start(q)
+        if u.path == "/api/milp/status":
+            return self.send_json({"running": MILP_THREAD is not None and MILP_THREAD.is_alive(),
+                                   "result": MILP_CACHE or None})
         if u.path.startswith("/output/"):
             name = os.path.basename(u.path)
             ctype = "image/png" if name.endswith(".png") else "text/plain; charset=utf-8"
             return self.send_file(os.path.join(HERE, "output", name), ctype)
+        self.send_error(404)
+
+    def do_POST(self):
+        u = urlparse(self.path)
+        q = parse_qs(u.query)
+        if u.path in ("/api/run-benchmark", "/api/benchmark"):
+            return self.benchmark(q)
+        if u.path in ("/api/export-excel", "/api/export_excel"):
+            return self.export_excel(q)
+        if u.path == "/api/milp":
+            return self.milp_start(q)
         self.send_error(404)
 
     # ------------------------------------------------------------ chạy thuật toán
@@ -229,7 +296,17 @@ class Handler(BaseHTTPRequestHandler):
             names = MODES.get(mode, MODES["all"])
             delay = max(fnum(q, "delay"), 0) / 1000
 
-            algos = [(a, ga.run_ga_iter(evaluate, LS_METHOD[a], seed, **kw)) for a in names]
+            ev_ml = matheuristics.LpEvaluator(k=mdl.K_RISK, sigma=mdl.SIGMA, scenarios=scen) if "ml" in names else None
+            algos = []
+            for a in names:
+                if a == "ml":
+                    algos.append((a, ga.run_ga_iter(ev_ml.evaluate, "none", seed,
+                                                    repair_fn=matheuristics.repair_ml,
+                                                    n_genes=matheuristics.N_GENES_ML, **kw)))
+                else:
+                    algos.append((a, ga.run_ga_iter(evaluate, LS_METHOD[a], seed, **kw)))
+            milp_launch(k=mdl.K_RISK, sigma=mdl.SIGMA, mu=mdl.MU, n_scen=len(scen),
+                        scen_seed=fnum(q, "scen_seed", int), time_limit=fnum(q, "time_limit", int))
             log("=" * 72, "head")
             log(f"BẮT ĐẦU CHẠY: {' + '.join(TAG[a].strip() for a, _ in algos)}   (seed {seed})", "head")
             log(f"  Bài toán : k={mdl.K_RISK}  μ={[int(v) for v in mdl.MU]}  σ={mdl.SIGMA:g}  "
@@ -243,6 +320,8 @@ class Handler(BaseHTTPRequestHandler):
                 log(f"  GA-TS    : {kw['ts_n_cand']} ứng viên/vòng, tenure {kw['ts_tenure']}, tabu chung cho các cá thể", "head")
             if "sa" in names:
                 log(f"  GA-SA    : xác suất nhận ban đầu {kw['sa_p0']:g}, T0 ước lượng từ 30 lần evaluate", "head")
+            if "ml" in names:
+                log(f"  GA-LP    : 63 gen máy móc + LP (HiGHS) tối ưu sản lượng cho từng phương án", "head")
             log("=" * 72, "head")
             self.sse("start", {"algos": [a for a, _ in algos], "budget": kw["budget"],
                                "n_scen": len(scen), "pop": kw["pop_size"]})
@@ -270,7 +349,7 @@ class Handler(BaseHTTPRequestHandler):
                     improved = st["best_f"] > best_seen[name] + 1e-9
                     if improved:
                         best_seen[name] = st["best_f"]
-                        payload["plan"] = plan_summary(st["best_x"], scen)
+                        payload["plan"] = _plan_for(name, st["best_x"], scen, ev_ml)
                     self.sse("gen", payload)
                     head = f"[{TAG[name]}] thế hệ {st['gen']:>3} | {st['evals']:>5}/{kw['budget']} đánh giá | "
                     if improved:
@@ -299,7 +378,7 @@ class Handler(BaseHTTPRequestHandler):
                     log(f"KẾT QUẢ [{TAG[a]}] Z = {r['best']:.3f} triệu | {r['gen']} thế hệ | {r['evals']} đánh giá "
                         f"(tìm kiếm cục bộ: {r['ls_calls']}) | {r['runtime']:.1f} s", a)
             if finished.get("spga"):
-                for a in ("ts", "sa"):
+                for a in ("ts", "sa", "ml"):
                     if finished.get(a):
                         d = finished[a]["best"] - finished["spga"]["best"]
                         log(f"{TAG[a]} {'hơn' if d >= 0 else 'kém'} SPGA gốc: {d:+.3f} triệu "
@@ -354,47 +433,117 @@ class Handler(BaseHTTPRequestHandler):
             labels = [FULL_LABEL[c] for c in codes]
             seeds = list(range(1, n_runs + 1))
             base = FULL_LABEL["spga"] if "spga" in codes else labels[0]
+            h0 = q.get("h0", [""])[0]
+            h1 = q.get("h1", [""])[0]
+            alpha = min(max(fnum(q, "alpha"), 0.0), 1.0) or 0.05
 
             mdl.K_RISK, mdl.SIGMA = k, sigma
             mdl.MU = mu
             mdl.Q_MAX = 1.5 * mdl.MU
             scen = mdl.sample_scenarios(n_scen, scen_seed)
             evaluate = functools.partial(mdl.evaluate, scenarios=scen)
+            ev_ml = matheuristics.LpEvaluator(k=k, sigma=sigma, scenarios=scen) if "ml" in codes else None
+            hist_grid = np.linspace(0, budget, 101).astype(int)
+            milp_launch(k=k, sigma=sigma, mu=mu, n_scen=n_scen, scen_seed=scen_seed,
+                        time_limit=fnum(q, "time_limit", int))
 
             log("=" * 72, "head")
             log(f"KIỂM ĐỊNH LẶP: {n_runs} seed × {' + '.join(labels)}  (budget {budget}, k={k}, σ={sigma:g})", "head")
             log("=" * 72, "head")
-            self.sse("start", {"algorithms": labels, "n_runs": n_runs, "seeds": seeds, "budget": budget})
+            self.sse("start", {"algorithms": labels, "n_runs": n_runs, "seeds": seeds, "budget": budget,
+                               "hypothesis": {"h0": h0, "h1": h1, "alpha": alpha}})
 
             fitness = {lab: [] for lab in labels}
             mean_profit = {lab: [] for lab in labels}
             mad = {lab: [] for lab in labels}
             runtime = {lab: [] for lab in labels}
-            hist_grid = np.linspace(0, budget, 101).astype(int)
-            histories = {lab: [] for lab in labels}
+            runs = []
 
             for i, s in enumerate(seeds):
-                for code, lab in zip(codes, labels):
-                    bx, hist, rt = ga.run_ga(evaluate, LS_METHOD[code], seed=s, budget=budget)
-                    f, mp, md = evaluate(bx)
+                self.sse("run_start", {"seed": s, "i": i, "n": n_runs})
+                algos = []
+                for c in codes:
+                    if c == "ml":
+                        algos.append((c, ga.run_ga_iter(ev_ml.evaluate, "none", s, budget,
+                                                        repair_fn=matheuristics.repair_ml,
+                                                        n_genes=matheuristics.N_GENES_ML)))
+                    else:
+                        algos.append((c, ga.run_ga_iter(evaluate, LS_METHOD[c], s, budget)))
+                best_seen = {c: -np.inf for c, _ in algos}
+                finished = {c: None for c, _ in algos}
+                final_state = {c: None for c, _ in algos}
+                run_plan = {lab: None for lab in labels}
+                while any(v is None for v in finished.values()):
+                    for c, it in algos:
+                        if finished[c] is not None:
+                            continue
+                        try:
+                            st = next(it)
+                        except StopIteration:
+                            finished[c] = finished[c] or {}
+                            continue
+                        lab = FULL_LABEL[c]
+                        payload = {"seed": s, "algo": lab, "gen": st["gen"], "evals": st["evals"],
+                                   "best": st["best_f"] / 1e6, "ls_calls": st["ls_calls"],
+                                   "runtime": st["runtime"]}
+                        if st["best_f"] > best_seen[c]:
+                            best_seen[c] = st["best_f"]
+                            payload["plan"] = _plan_for(c, st["best_x"], scen, ev_ml)
+                            run_plan[lab] = payload["plan"]
+                        self.sse("gen", payload)
+                        if st["done"]:
+                            finished[c] = {"best": st["best_f"], "gen": st["gen"], "evals": st["evals"],
+                                           "runtime": st["runtime"], "ls_calls": st["ls_calls"]}
+                            final_state[c] = st
+                run_detail = {"seed": s, "algorithms": {}}
+                for c in codes:
+                    lab = FULL_LABEL[c]
+                    st = final_state[c]
+                    if c == "ml":
+                        f, mp, md = ev_ml.evaluate(st["best_x"])
+                    else:
+                        f, mp, md = evaluate(st["best_x"])
                     fitness[lab].append(f)
                     mean_profit[lab].append(mp)
                     mad[lab].append(md)
-                    runtime[lab].append(rt)
-                    histories[lab].append(_resample(hist, hist_grid))
-                self.sse("seed", {"seed": s, "done": i + 1, "total": n_runs,
-                                   "fitness": {lab: fitness[lab][-1] / 1e6 for lab in labels}})
-                log(f"  seed {s:>2}/{n_runs}: " + "   ".join(f"{lab}: {fitness[lab][-1] / 1e6:.3f} tr" for lab in labels), "dim")
+                    runtime[lab].append(st["runtime"])
+                    hist = [[int(hist_grid[j]), float(v)] for j, v in enumerate(_resample(st["history"], hist_grid))]
+                    run_detail["algorithms"][lab] = {"fitness": f, "mean_profit": mp, "mad": md,
+                                                     "runtime": st["runtime"], "history": hist,
+                                                     "plan": run_plan.get(lab)}
+                runs.append(run_detail)
+                best_lab = max(labels, key=lambda lb: run_detail["algorithms"][lb]["fitness"])
+                # gửi kèm TOÀN BỘ lịch sử hội tụ + phương án của run này cho UI xem lại
+                self.sse("run_done", {"seed": s, "i": i, "n": n_runs,
+                                      "best_z": run_detail["algorithms"][best_lab]["fitness"] / 1e6,
+                                      "best_algo": best_lab,
+                                      "algorithms": {lb: {"fitness": run_detail["algorithms"][lb]["fitness"],
+                                                          "mean_profit": run_detail["algorithms"][lb]["mean_profit"],
+                                                          "mad": run_detail["algorithms"][lb]["mad"],
+                                                          "runtime": run_detail["algorithms"][lb]["runtime"],
+                                                          "history": run_detail["algorithms"][lb]["history"],
+                                                          "plan": run_detail["algorithms"][lb]["plan"]}
+                                                     for lb in labels}})
+                log(f"  seed {s:>2}/{n_runs}: " + "   ".join(
+                    f"{lb}: {run_detail['algorithms'][lb]['fitness'] / 1e6:.3f} tr" for lb in labels), "dim")
 
-            benchmark = {"algorithms": labels, "base": base, "n_runs": n_runs,
-                         "seeds": seeds, "fitness": fitness, "mean_profit": mean_profit,
-                         "mad": mad, "runtime": runtime,
-                         "histories": {"grid": hist_grid.tolist(), **histories},
+            leaderboard = sorted(
+                [{"seed": rd["seed"],
+                  "algorithm": max(labels, key=lambda lb: rd["algorithms"][lb]["fitness"]),
+                  "z": max(rd["algorithms"][lb]["fitness"] for lb in labels)} for rd in runs],
+                key=lambda x: -x["z"])[:3]
+
+            benchmark = {"algorithms": labels, "base": base, "n_runs": n_runs, "seeds": seeds,
+                         "fitness": fitness, "mean_profit": mean_profit, "mad": mad, "runtime": runtime,
+                         "leaderboard": leaderboard, "runs": runs,
+                         "hypothesis": {"h0": h0, "h1": h1, "alpha": alpha},
                          "params": {"budget": budget, "k": k, "sigma": sigma, "n_scen": n_scen, "scen_seed": scen_seed}}
             BENCHMARK_CACHE.clear()
             BENCHMARK_CACHE.update(benchmark)
             stats = exporter.compute_benchmark_stats(benchmark)
-            self.sse("done", {"summary": stats})
+            conclusion = exporter.generate_hypothesis_conclusion(stats, {"h0": h0, "h1": h1, "alpha": alpha})
+            self.sse("done", {"summary": stats, "leaderboard": leaderboard, "conclusion": conclusion,
+                              "hypothesis": {"h0": h0, "h1": h1, "alpha": alpha}})
             log("-" * 72, "head")
             for a, v in stats["per_alg"].items():
                 log(f"  {a}: TB {v['mean'] / 1e6:.3f} tr ± {v['std'] / 1e6:.3f} (median {v['median'] / 1e6:.3f})", a)
@@ -436,6 +585,8 @@ class Handler(BaseHTTPRequestHandler):
                 k_max, k_min = k_min, k_max
             k_grid = np.linspace(k_min, k_max, k_steps)
             sigma_grid = np.linspace(s_min, s_max, s_steps)
+            nominal_k = float(k_grid[int(np.argmin(np.abs(k_grid - 0.5)))])
+            nominal_sigma = float(sigma_grid[int(np.argmin(np.abs(sigma_grid - DEFAULT_MODEL["SIGMA"])))])
 
             total = len(k_grid) * len(sigma_grid) * len(labels)
             log("=" * 72, "head")
@@ -445,6 +596,8 @@ class Handler(BaseHTTPRequestHandler):
                                "sigma_grid": sigma_grid.tolist(), "total": total})
 
             F = {lab: np.zeros((len(k_grid), len(sigma_grid))) for lab in labels}
+            P = {lab: np.zeros((len(k_grid), len(sigma_grid))) for lab in labels}
+            M = {lab: np.zeros((len(k_grid), len(sigma_grid))) for lab in labels}
             done = 0
             for ki, k in enumerate(k_grid):
                 for si, sigma in enumerate(sigma_grid):
@@ -454,27 +607,43 @@ class Handler(BaseHTTPRequestHandler):
                     mdl.Q_MAX = 1.5 * mu
                     scen = mdl.sample_scenarios(n_scen, scen_seed)
                     evaluate = functools.partial(mdl.evaluate, scenarios=scen)
+                    ev_ml = matheuristics.LpEvaluator(k=k, sigma=sigma, scenarios=scen) if "ml" in codes else None
                     for code, lab in zip(codes, labels):
                         best_f = -np.inf
+                        best_mp = best_md = 0.0
                         for r in range(sens_runs):
-                            bx, _, _ = ga.run_ga(evaluate, LS_METHOD[code], seed=1 + r, budget=budget)
-                            f, _, _ = evaluate(bx)
-                            best_f = max(best_f, f)
+                            if code == "ml":
+                                bx, _, _ = matheuristics.run_matheur(ev_ml.evaluate, seed=1 + r, budget=budget)
+                                f, mp, md = ev_ml.evaluate(bx)
+                            else:
+                                bx, _, _ = ga.run_ga(evaluate, LS_METHOD[code], seed=1 + r, budget=budget)
+                                f, mp, md = evaluate(bx)
+                            if f > best_f:
+                                best_f, best_mp, best_md = f, mp, md
                         F[lab][ki, si] = best_f
+                        P[lab][ki, si] = best_mp
+                        M[lab][ki, si] = best_md
                     done += len(labels)
                     self.sse("cell", {"k": k, "sigma": sigma, "done": done, "total": total})
                 log(f"  k={k:.2f}: xong {done}/{total} ô", "dim")
 
             sensitivity = {"algorithms": labels, "k_grid": k_grid.tolist(), "sigma_grid": sigma_grid.tolist(),
-                           "fitness": {lab: F[lab].tolist() for lab in labels}}
+                           "nominal_k": nominal_k, "nominal_sigma": nominal_sigma,
+                           "fitness": {lab: F[lab].tolist() for lab in labels},
+                           "profit": {lab: P[lab].tolist() for lab in labels},
+                           "mad": {lab: M[lab].tolist() for lab in labels}}
             metrics = exporter.compute_sensitivity_metrics(sensitivity)
-            sensitivity["mean_by_k"] = {lab: metrics[lab]["mean_by_k"] for lab in labels}
-            sensitivity["mean_by_sigma"] = {lab: metrics[lab]["mean_by_sigma"] for lab in labels}
+            impact = exporter.build_sensitivity_impact(sensitivity)
+            narrative = exporter.generate_sensitivity_narrative(sensitivity, metrics)
+            sensitivity["metrics"] = metrics
+            sensitivity["impact"] = impact
+            sensitivity["narrative"] = narrative
             SENSITIVITY_CACHE.clear()
             SENSITIVITY_CACHE.update(sensitivity)
             SENSITIVITY_METRICS.clear()
             SENSITIVITY_METRICS.update(metrics)
-            self.sse("done", {"metrics": metrics})
+            self.sse("done", {"metrics": metrics, "impact": impact, "narrative": narrative,
+                              "k_grid": k_grid.tolist(), "sigma_grid": sigma_grid.tolist()})
             log("-" * 72, "head")
             for lab in labels:
                 m = metrics[lab]
@@ -496,7 +665,9 @@ class Handler(BaseHTTPRequestHandler):
         os.makedirs(os.path.join(HERE, "output"), exist_ok=True)
         path = os.path.join(HERE, "output", "bao_cao_kiem_dinh.xlsx")
         try:
-            exporter.build_excel_report(BENCHMARK_CACHE, SENSITIVITY_CACHE or None, path)
+            exporter.export_single_tab_report(BENCHMARK_CACHE, SENSITIVITY_CACHE or None,
+                                              BENCHMARK_CACHE.get("hypothesis", {}), path,
+                                              milp=MILP_CACHE or None)
         except ImportError as e:
             return self.send_json({"error": f"Thiếu thư viện: {e}. Chạy: pip install openpyxl"}, 500)
         except Exception as e:
@@ -505,23 +676,26 @@ class Handler(BaseHTTPRequestHandler):
         return self.send_file(path, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                               download="bao_cao_kiem_dinh.xlsx")
 
-    # ------------------------------------------------------------ biểu đồ backend (Base64)
-    def charts_generate(self, q):
-        if not BENCHMARK_CACHE:
-            return self.send_json({"error": "Chưa có kết quả kiểm định."}, 400)
-        images = {}
-        try:
-            images["overlay"] = exporter.data_url(exporter.overlay_distribution_png(BENCHMARK_CACHE))
-            images["cdf"] = exporter.data_url(exporter.cumulative_probability_png(BENCHMARK_CACHE))
-            if "histories" in BENCHMARK_CACHE:
-                images["band"] = exporter.data_url(exporter.convergence_band_png(BENCHMARK_CACHE["histories"]))
-            if SENSITIVITY_CACHE:
-                images["tornado"] = exporter.data_url(exporter.sensitivity_tornado_png(SENSITIVITY_CACHE, SENSITIVITY_METRICS))
-        except ImportError as e:
-            return self.send_json({"error": f"Thiếu thư viện: {e}. Chạy: pip install matplotlib"}, 500)
-        except Exception as e:
-            return self.send_json({"error": f"Lỗi vẽ biểu đồ: {e}"}, 500)
-        return self.send_json({"images": images})
+    # ------------------------------------------------------------ chi tiết 1 run (click-to-view)
+    def benchmark_run(self, q):
+        seed = fnum(q, "seed", int)
+        for rd in BENCHMARK_CACHE.get("runs", []):
+            if rd["seed"] == seed:
+                return self.send_json(rd)
+        return self.send_json({"error": "Không tìm thấy run này."}, 404)
+
+    # ------------------------------------------------------------ cận tối ưu MILP (chạy nền)
+    def milp_start(self, q):
+        if MILP_THREAD is not None and MILP_THREAD.is_alive():
+            return self.send_json({"running": True, "result": MILP_CACHE or None})
+        k = min(max(fnum(q, "k"), 0.0), 1.0)
+        sigma = max(fnum(q, "sigma"), 0.0)
+        n_scen = max(fnum(q, "n_scen", int), 2)
+        scen_seed = fnum(q, "scen_seed", int)
+        time_limit = max(fnum(q, "time_limit", int), 20)
+        mu = np.array([fnum(q, "mu1"), fnum(q, "mu2"), fnum(q, "mu3")])
+        milp_launch(k, sigma, mu, n_scen, scen_seed, time_limit)
+        return self.send_json({"running": True})
 
 
 def load_results():

@@ -3,245 +3,423 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Demo SPGA, GA-TS, GA-SA – Nhóm 8</title>
+<title>Hệ thống Đánh giá Thuật toán - Nhóm 8</title>
 <style>
-:root{
-  --spga:#1F3A93; --ts:#E07B39; --sa:#2E8B57; --ts-ink:#B54E12; --sa-ink:#1E7B4A;
-  --bg:#F4F6FA; --card:#fff; --ink:#1d2433; --muted:#667085; --line:#e2e6ee; --red:#b00020; --soft:#eef2fb; --win:#FFF3C4;
+/* Chuẩn giao diện phần mềm cũ: B&W / Grayscale, Arial, phẳng tuyệt đối */
+* {
+  box-sizing: border-box;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  text-shadow: none !important;
+  transition: none !important;
+  animation: none !important;
 }
-*{box-sizing:border-box}
-html,body{height:100%}
-body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.35 "Segoe UI",system-ui,-apple-system,Roboto,Arial,sans-serif;
-  height:100vh;display:flex;flex-direction:column;gap:8px;padding:0 12px 10px;overflow:hidden}
-header{margin:0 -12px;background:var(--spga);color:#fff;padding:8px 16px;display:flex;align-items:center;gap:14px;flex-wrap:wrap}
-h1{font-size:17px;margin:0;font-weight:600;margin-right:auto}
-nav.tabs{display:flex;gap:4px}
-nav.tabs .tab{background:transparent;color:#fff;border:1px solid rgba(255,255,255,.45);border-radius:6px;
-  padding:5px 12px;font:inherit;cursor:pointer;opacity:.82}
-nav.tabs .tab.active{background:#fff;color:var(--spga);opacity:1;font-weight:600}
-.tabpanel{display:none;flex:1;min-height:0}
-.tabpanel.active{display:flex;flex-direction:column;gap:8px}
-.toolbar{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:8px 12px;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
-.toolbar label{display:flex;align-items:center;gap:5px;font-size:13px}
-input,select{width:70px;padding:4px 6px;border:1px solid #cdd3df;border-radius:5px;font:inherit;color:var(--ink);background:#fff}
-select{width:auto}
-input:disabled,select:disabled{opacity:.6}
-.ghost{background:transparent;color:var(--spga);border:1px solid var(--line);border-radius:6px;padding:5px 10px;font:inherit;cursor:pointer}
-#go{background:var(--ts);color:#fff;border:0;border-radius:6px;padding:7px 22px;font:600 15px "Segoe UI",system-ui,sans-serif;cursor:pointer;min-width:112px}
-#go.running{background:#fff;color:var(--ink);border:1px solid var(--line)}
-.primary{background:var(--ts);color:#fff;border:0;border-radius:6px;padding:7px 18px;font:600 14px "Segoe UI",system-ui,sans-serif;cursor:pointer}
-.primary.running{background:#fff;color:var(--ink);border:1px solid var(--line)}
-.primary2{background:var(--spga);color:#fff;border:0;border-radius:6px;padding:7px 16px;font:600 14px "Segoe UI",system-ui,sans-serif;cursor:pointer}
-.scores{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
-.score{background:var(--card);border:1px solid var(--line);border-left:5px solid var(--line);border-radius:8px;padding:6px 12px}
-.score.spga{border-left-color:var(--spga)} .score.ts{border-left-color:var(--ts)} .score.sa{border-left-color:var(--sa)}
-.score .k{font-size:12.5px;color:var(--muted)}
-.score .line{display:flex;align-items:baseline;gap:10px}
-.score .v{font-size:25px;font-weight:700;line-height:1.15}
-.score .d{font-size:14px;font-weight:600}
-.score .s{font-size:12px;color:var(--muted)}
-.bar{height:4px;background:#eceff5;border-radius:2px;margin-top:4px;overflow:hidden}
-.bar i{display:block;height:100%;width:0;background:var(--spga)}
-.ts .bar i{background:var(--ts)} .sa .bar i{background:var(--sa)}
-main{flex:1;min-height:0;display:grid;grid-template-columns:minmax(0,1.5fr) minmax(350px,1fr);gap:8px}
-.col{min-height:0;display:flex;flex-direction:column;gap:8px}
-.card{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:8px 12px;min-height:0;display:flex;flex-direction:column}
-.card h2{font-size:13.5px;margin:0;color:var(--spga);font-weight:600}
-.hint{font-size:12px;color:var(--muted);margin:0}
-.plot{position:relative;flex:1;min-height:0;margin-top:4px}
-.plot canvas{position:absolute;inset:0;width:100%;height:100%}
-#convCard{flex:1.3}
-#planCard{flex:1}
-.plans{flex:1;min-height:0;display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:2px}
-.plans>div{min-height:0;display:flex;flex-direction:column}
-.plans b{font-size:12.5px;font-weight:600}
-.plans .spga b{color:var(--spga)} .plans .ts b{color:var(--ts-ink)} .plans .sa b{color:var(--sa-ink)}
-table{border-collapse:collapse;width:100%;font-size:13px;margin-top:4px;font-variant-numeric:tabular-nums}
-th,td{padding:2.5px 6px;text-align:right;border-bottom:1px solid var(--line);white-space:nowrap}
-th:first-child,td:first-child{text-align:left;white-space:normal}
-thead th{font-weight:600}
-thead th.spga{color:var(--spga)} thead th.ts{color:var(--ts-ink)} thead th.sa{color:var(--sa-ink)}
-tr.sec td{background:var(--soft);color:var(--spga);font-weight:600;font-size:12px}
-td.win{background:var(--win);font-weight:700}
-#feedCard{flex:1}
-#feed{flex:1;min-height:0;overflow:hidden;margin:4px 0 0;padding:0;list-style:none;font-size:12.5px}
-#feed li{padding:2px 0;border-bottom:1px solid #f0f2f6;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-#feed .ts{color:var(--ts-ink);font-weight:600}
-#feed .sa{color:var(--sa-ink);font-weight:600}
-#feed .blocked{color:var(--muted)}
-#feed .aspiration{font-weight:600}
-.err{color:var(--red)}
-.progress{height:6px;background:#eceff5;border-radius:3px;overflow:hidden;margin-top:2px}
-.progress-bar{height:100%;width:0;background:var(--ts);transition:width .2s}
-.bench-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.25fr);gap:8px;flex:1;min-height:0}
-.bench-grid .card{overflow:auto}
-.charts{display:grid;grid-template-columns:1fr 1fr;gap:10px}
-.charts figure{margin:0}
-.charts img{width:100%;border:1px solid var(--line);border-radius:6px;background:#fff}
-.charts figcaption{font-size:12px;color:var(--muted);margin-top:2px}
-dialog{border:0;border-radius:10px;padding:16px 20px;max-width:760px;width:calc(100% - 32px);color:var(--ink);box-shadow:0 12px 40px rgba(0,0,0,.25)}
-dialog::backdrop{background:rgba(20,30,60,.45)}
-dialog h2{margin:0 0 8px;font-size:16px;color:var(--spga)}
-dialog h3{margin:10px 0 2px;font-size:13.5px}
-dialog p,dialog li{font-size:13px;line-height:1.5;margin:2px 0}
-dialog ul{margin:2px 0;padding-left:18px}
-dialog .grid{display:grid;grid-template-columns:1fr 80px;gap:6px 10px;align-items:center;font-size:13px}
-dialog .grid input{border:1px solid #cdd3df;width:100%}
-dialog .grid h3{grid-column:1/3;margin:6px 0 0}
-dialog .close{margin-top:12px;background:var(--spga);color:#fff;border:0;border-radius:6px;padding:6px 16px;font:inherit;cursor:pointer}
-@media(max-width:900px),(max-height:520px){
-  body{height:auto;overflow:auto}
-  main{grid-template-columns:minmax(0,1fr)}
-  .scores{grid-template-columns:1fr}
-  .bench-grid{grid-template-columns:minmax(0,1fr)}
-  #convCard .plot,.plans .plot{height:200px;flex:none}
-  #feed{max-height:180px}
+html, body {
+  width: 100%;
+  height: 100vh;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  background-color: #ffffff;
+  color: #000000;
+  font-family: Arial, sans-serif;
+  font-size: 11.5px;
+  line-height: 1.25;
+}
+body { display: flex; flex-direction: column; padding: 6px 8px; gap: 6px; }
+
+/* Header & Tabs */
+header {
+  border-bottom: 2px solid #000000;
+  padding-bottom: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-shrink: 0;
+}
+h1 { font-size: 14px; margin: 0; font-weight: bold; color: #000000; }
+nav.tabs { display: flex; gap: 2px; }
+nav.tabs .tab {
+  background: #e0e0e0;
+  color: #000000;
+  border: 1px solid #767676;
+  padding: 3px 8px;
+  font-family: Arial, sans-serif;
+  font-size: 11px;
+  cursor: pointer;
+}
+nav.tabs .tab.active {
+  background: #ffffff;
+  font-weight: bold;
+  border-bottom: 1px solid #ffffff;
+  margin-bottom: -1px;
+}
+
+/* Tab Panels */
+.tabpanel { display: none; flex: 1; min-height: 0; flex-direction: column; gap: 6px; }
+.tabpanel.active { display: flex; }
+
+/* Toolbar */
+.toolbar {
+  background: #f4f4f4;
+  border: 1px solid #ccc;
+  padding: 4px 6px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  flex-shrink: 0;
+}
+.toolbar label { display: flex; align-items: center; gap: 3px; font-size: 11px; }
+
+input, select, button {
+  font-family: Arial, sans-serif;
+  font-size: 11px;
+  padding: 2px 4px;
+  border: 1px solid #767676;
+  background: #ffffff;
+  color: #000000;
+  height: 23px;
+}
+button { cursor: pointer; background: #e1e1e1; }
+button:hover { background: #d0d0d0; }
+button.primary { background: #444444; color: #ffffff; border-color: #000000; font-weight: bold; }
+button.primary:hover { background: #111111; }
+button.running, button.primary.running {
+  background: #ffffff !important;
+  color: #000000 !important;
+  border: 1px dashed #000000 !important;
+}
+
+/* Score Cards */
+.scores { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; flex-shrink: 0; }
+.score { border: 1px solid #ccc; background: #fafafa; padding: 4px 6px; }
+.score .k { font-size: 10.5px; color: #333333; font-weight: bold; }
+.score .line { display: flex; align-items: baseline; gap: 8px; }
+.score .v { font-size: 15px; font-weight: bold; margin: 1px 0; }
+.score .d { font-size: 10px; color: #555555; }
+.score .s { font-size: 10px; color: #666666; }
+
+/* Color coding nhất quán: SPGA xanh, GA-TS cam, GA-SA xanh lá, GA-LP tím */
+.score.spga{border-left:3px solid #1F3A93} .score.ts{border-left:3px solid #E07B39}
+.score.sa{border-left:3px solid #2E8B57} .score.ml{border-left:3px solid #7B2FBE}
+.score.spga .v{color:#1F3A93} .score.ts .v{color:#B54E12}
+.score.sa .v{color:#1E7B4A} .score.ml .v{color:#5E239D}
+.score.spga .progress-bar{background:#1F3A93} .score.ts .progress-bar{background:#E07B39}
+.score.sa .progress-bar{background:#2E8B57} .score.ml .progress-bar{background:#7B2FBE}
+th.spga{color:#1F3A93} th.ts{color:#B54E12} th.sa{color:#1E7B4A} th.ml{color:#5E239D}
+
+.progress { height: 6px; border: 1px solid #767676; background: #ffffff; margin-top: 2px; flex-shrink: 0; }
+.progress-bar { height: 100%; width: 0%; background: #444444; }
+
+/* Grids & Cards */
+.main-layout { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0,1.4fr) minmax(320px,1fr); gap: 6px; }
+.grid-2col { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0,1.2fr) minmax(320px,1fr); gap: 6px; }
+.col { display: flex; flex-direction: column; gap: 6px; min-height: 0; }
+
+.card {
+  border: 1px solid #ccc;
+  background: #ffffff;
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+.card h2 {
+  font-size: 11.5px;
+  margin: 0 0 3px 0;
+  font-weight: bold;
+  color: #000000;
+  border-bottom: 1px solid #ddd;
+  padding-bottom: 2px;
+  flex-shrink: 0;
+}
+.hint { font-size: 10px; color: #555555; margin: 1px 0; flex-shrink: 0; }
+
+/* Chart Canvas Container */
+.plot-wrapper { position: relative; flex: 1; min-height: 0; width: 100%; height: 100%; }
+.plot-wrapper canvas { position: absolute !important; top: 0; left: 0; width: 100% !important; height: 100% !important; }
+
+/* Plans Grid */
+.plans-grid { flex: 1; min-height: 0; display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; }
+.plan-item { border: 1px solid #ddd; padding: 2px; display: flex; flex-direction: column; min-height: 0; }
+.plan-item b { display: block; font-size: 10px; text-align: center; margin-bottom: 2px; flex-shrink: 0; }
+
+/* Scroll Containers */
+.scroll-table { flex: 1; min-height: 0; overflow-y: auto; border: 1px solid #ccc; background: #ffffff; }
+
+table { border-collapse: collapse; width: 100%; font-size: 11px; font-variant-numeric: tabular-nums; }
+th, td { border: 1px solid #ccc; padding: 2.5px 4px; text-align: right; white-space: nowrap; }
+th { background: #eaeaea; font-weight: bold; text-align: center; color: #000000; position: sticky; top: 0; z-index: 1; }
+th:first-child, td:first-child { text-align: left; white-space: normal; }
+tr.sec td { background: #eaeaea; font-weight: bold; text-align: left; }
+td.win { background-color: #FFF3C4; font-weight: bold; }
+td.pos { color: #1E7B4A; font-weight: bold; }
+td.neg { color: #B00020; font-style: italic; }
+
+.runlist { display: flex; flex-wrap: wrap; gap: 3px; margin-bottom: 4px; max-height: 60px; overflow-y: auto; flex-shrink: 0; }
+.runlist button { padding: 1px 5px; font-size: 10px; height: 20px; }
+.runlist button.active { background: #000000; color: #ffffff; }
+.runlist button.top { background: #FFF3C4; border: 1px dashed #000000; font-weight: bold; }
+
+#feed {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 10px;
+  border: 1px solid #ccc;
+  background: #fafafa;
+}
+#feed li { padding: 2px 4px; border-bottom: 1px solid #eee; font-family: monospace; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* Tooltip (biểu đồ độ nhạy) */
+#tooltip {
+  position: absolute;
+  display: none;
+  background: #000000;
+  color: #ffffff;
+  border: 1px solid #767676;
+  padding: 4px 8px;
+  font-family: Arial, sans-serif;
+  font-size: 10.5px;
+  pointer-events: none;
+  z-index: 1000;
+  line-height: 1.45;
+}
+
+dialog {
+  border: 2px solid #000000;
+  background: #ffffff;
+  padding: 10px 12px;
+  max-width: 600px;
+  width: 90%;
+  color: #000000;
+}
+dialog::backdrop { background: rgba(0, 0, 0, 0.3); }
+dialog h2 { font-size: 13px; margin: 0 0 6px; color: #000000; }
+dialog h3 { margin: 8px 0 2px; font-size: 11.5px; }
+dialog p, dialog li { font-size: 11px; line-height: 1.45; margin: 2px 0; }
+dialog ul { margin: 2px 0; padding-left: 16px; }
+.dialog-grid { display: grid; grid-template-columns: 1fr 90px; gap: 4px 8px; align-items: center; font-size: 11px; }
+.dialog-grid input { border: 1px solid #767676; width: 100%; }
+.dialog-grid h3 { grid-column: 1/3; margin: 6px 0 0; }
+
+.err { color: #B00020; font-weight: bold; background: #eeeeee; padding: 2px 4px; border: 1px solid #777; }
+
+@media (max-width: 900px), (max-height: 560px) {
+  body { height: auto; overflow: auto; }
+  .main-layout, .grid-2col { grid-template-columns: minmax(0, 1fr); }
+  .scores { grid-template-columns: 1fr 1fr; }
+  #feed { max-height: 120px; }
 }
 </style>
 </head>
 <body>
+
 <header>
-  <h1>SPGA gốc, GA-TS, GA-SA <span style="font-weight:400;opacity:.8">· Nhóm 8</span></h1>
+  <h1>SPGA gốc, GA-TS, GA-SA, GA-LP - Giao diện Đánh giá (Nhóm 8)</h1>
   <nav class="tabs">
-    <button class="tab active" data-tab="single">1. Chạy đơn</button>
-    <button class="tab" data-tab="bench">2. Kiểm định lặp</button>
-    <button class="tab" data-tab="sens">3. Phân tích độ nhạy</button>
+    <button class="tab active" id="t-single" onclick="switchTab('single')">1. Chạy đơn</button>
+    <button class="tab" id="t-bench" onclick="switchTab('bench')">2. Kiểm định lặp</button>
+    <button class="tab" id="t-sens" onclick="switchTab('sens')">3. Phân tích độ nhạy</button>
   </nav>
 </header>
 
-<!-- ===================== TAB 1: Chạy đơn ===================== -->
+<!-- ===================== TAB 1: CHẠY ĐƠN ===================== -->
 <section class="tabpanel active" id="tab-single">
   <form id="f" class="toolbar" novalidate>
-    <label>Chạy
-      <select name="mode"><option value="all">Cả ba</option><option value="spga">SPGA gốc</option><option value="ts">GA-TS</option><option value="sa">GA-SA</option></select>
+    <label>Chế độ:
+      <select name="mode">
+        <option value="all">Cả bốn</option>
+        <option value="spga">SPGA gốc</option>
+        <option value="ts">GA-TS</option>
+        <option value="sa">GA-SA</option>
+        <option value="ml">Matheuristics (GA-LP)</option>
+      </select>
     </label>
-    <label>Seed <input name="seed" type="number" style="width:54px"></label>
-    <label>Lần đánh giá
-      <select name="budget"><option value="600">600 (nhanh)</option><option value="2000">2000</option><option value="6000">6000 (chuẩn)</option></select>
+    <label>Seed: <input name="seed" type="number" style="width:45px"></label>
+    <label title="Nhập số tùy ý hoặc chọn gợi ý">Số lần đánh giá:
+      <input name="budget" list="budgetList" type="number" min="100" style="width:70px">
+      <datalist id="budgetList">
+        <option value="600"></option><option value="2000"></option><option value="6000"></option><option value="12000"></option>
+      </datalist>
     </label>
-    <label title="Mức ngại rủi ro, từ 0 đến 1">k <input name="k" type="number" step="0.1" min="0" max="1" style="width:54px"></label>
-    <label title="Độ lệch nhu cầu">σ <input name="sigma" type="number" step="1000" min="0"></label>
-    <button class="ghost" type="button" id="openLs">Tìm kiếm cục bộ</button>
-    <button class="ghost" type="button" id="openHow">Cách hoạt động</button>
-    <button id="go" type="submit">▶ Chạy</button>
+    <label title="Mức ngại rủi ro, từ 0 đến 1">k: <input name="k" type="number" step="0.1" min="0" max="1" style="width:40px"></label>
+    <label title="Độ lệch nhu cầu">σ: <input name="sigma" type="number" step="1000" min="0" style="width:55px"></label>
+    <button type="button" id="openLs">Tham số LS</button>
+    <button type="button" id="openHow">Hướng dẫn</button>
+    <button id="go" type="submit" class="primary">▶ Chạy</button>
   </form>
 
   <section class="scores">
-    <div class="score spga"><div class="k">SPGA gốc · Z tốt nhất</div>
+    <div class="score spga">
+      <div class="k">SPGA gốc · Z tốt nhất</div>
       <div class="line"><span class="v" id="z_spga">–</span></div>
-      <div class="s" id="sub_spga">Chưa chạy</div><div class="bar"><i id="bar_spga"></i></div></div>
-    <div class="score ts"><div class="k">GA-TS · Z tốt nhất</div>
+      <div class="s" id="sub_spga">Chưa chạy</div>
+      <div class="progress"><div class="progress-bar" id="bar_spga"></div></div>
+    </div>
+    <div class="score ts">
+      <div class="k">GA-TS · Z tốt nhất</div>
       <div class="line"><span class="v" id="z_ts">–</span><span class="d" id="d_ts"></span></div>
-      <div class="s" id="sub_ts">Chưa chạy</div><div class="bar"><i id="bar_ts"></i></div></div>
-    <div class="score sa"><div class="k">GA-SA · Z tốt nhất</div>
+      <div class="s" id="sub_ts">Chưa chạy</div>
+      <div class="progress"><div class="progress-bar" id="bar_ts"></div></div>
+    </div>
+    <div class="score sa">
+      <div class="k">GA-SA · Z tốt nhất</div>
       <div class="line"><span class="v" id="z_sa">–</span><span class="d" id="d_sa"></span></div>
-      <div class="s" id="sub_sa">Chưa chạy</div><div class="bar"><i id="bar_sa"></i></div></div>
+      <div class="s" id="sub_sa">Chưa chạy</div>
+      <div class="progress"><div class="progress-bar" id="bar_sa"></div></div>
+    </div>
+    <div class="score ml">
+      <div class="k">Matheuristics (GA-LP) · Z tốt nhất</div>
+      <div class="line"><span class="v" id="z_ml">–</span><span class="d" id="d_ml"></span></div>
+      <div class="s" id="sub_ml">Chưa chạy</div>
+      <div class="progress"><div class="progress-bar" id="bar_ml"></div></div>
+    </div>
   </section>
 
-  <main>
+  <div class="main-layout">
     <div class="col">
-      <div class="card" id="convCard">
+      <div class="card" style="flex:1.2;">
         <h2 id="convTitle">Hội tụ: Z tốt nhất theo số lần đánh giá</h2>
-        <p class="hint" id="convHint">Đường càng cao càng tốt. Chấm tròn là lúc tìm kiếm cục bộ chạy.</p>
-        <div class="plot"><canvas id="cConv"></canvas></div>
+        <p class="hint" id="convHint">Đường càng cao càng tốt. Đường nét đứt xám là cận tối ưu toàn cục MILP.</p>
+        <div class="plot-wrapper"><canvas id="cConv"></canvas></div>
       </div>
-      <div class="card" id="planCard">
+      <div class="card" style="flex:1;">
         <h2>Phương án tốt nhất: số tester mỗi quý</h2>
-        <p class="hint">Màu đậm là máy mua, màu nhạt là máy thuê, đường đen là nhu cầu trung bình.</p>
-        <div class="plans">
-          <div class="spga"><b>SPGA gốc</b><div class="plot"><canvas id="cPlan_spga"></canvas></div></div>
-          <div class="ts"><b>GA-TS</b><div class="plot"><canvas id="cPlan_ts"></canvas></div></div>
-          <div class="sa"><b>GA-SA</b><div class="plot"><canvas id="cPlan_sa"></canvas></div></div>
+        <p class="hint">Cột đậm là máy mua, cột nhạt là máy thuê, đường đen là nhu cầu trung bình.</p>
+        <div class="plans-grid">
+          <div class="plan-item"><b>SPGA gốc</b><div class="plot-wrapper"><canvas id="cPlan_spga"></canvas></div></div>
+          <div class="plan-item"><b>GA-TS</b><div class="plot-wrapper"><canvas id="cPlan_ts"></canvas></div></div>
+          <div class="plan-item"><b>GA-SA</b><div class="plot-wrapper"><canvas id="cPlan_sa"></canvas></div></div>
+          <div class="plan-item"><b>GA-LP</b><div class="plot-wrapper"><canvas id="cPlan_ml"></canvas></div></div>
         </div>
       </div>
     </div>
     <div class="col">
-      <div class="card">
+      <div class="card" style="flex:1.2;">
         <h2>Bảng so sánh</h2>
-        <table>
-          <thead><tr><th>Chỉ số</th><th class="spga">SPGA</th><th class="ts">GA-TS</th><th class="sa">GA-SA</th></tr></thead>
-          <tbody id="tb"></tbody>
-        </table>
-        <p class="hint" id="statLine" style="margin-top:4px"></p>
+        <div class="scroll-table">
+          <table>
+            <thead>
+              <tr><th>Chỉ số</th><th class="spga">SPGA</th><th class="ts">GA-TS</th><th class="sa">GA-SA</th><th class="ml">GA-LP</th></tr>
+            </thead>
+            <tbody id="tb"></tbody>
+          </table>
+        </div>
+        <p class="hint" id="statLine" style="margin-top:3px"></p>
       </div>
-      <div class="card" id="feedCard">
+      <div class="card" style="flex:1;">
         <h2>Tìm kiếm cục bộ đang làm gì</h2>
-        <ul id="feed"><li class="hint">Bấm ▶ Chạy để xem từng bước của Tabu Search và Simulated Annealing.</li></ul>
+        <ul id="feed"><li class="hint" style="padding:4px">Bấm ▶ Chạy để xem từng bước của Tabu Search và Simulated Annealing.</li></ul>
       </div>
     </div>
-  </main>
+  </div>
 </section>
 
-<!-- ===================== TAB 2: Kiểm định lặp ===================== -->
+<!-- ===================== TAB 2: KIỂM ĐỊNH LẶP ===================== -->
 <section class="tabpanel" id="tab-bench">
-  <form id="benchForm" class="toolbar" novalidate>
-    <label>Số lần lặp N <input name="n_runs" type="number" min="1" style="width:56px"></label>
-    <label>Lần đánh giá
-      <select name="budget"><option value="600">600</option><option value="2000">2000</option><option value="6000">6000 (chuẩn)</option></select>
+  <form id="benchForm" class="toolbar" onsubmit="event.preventDefault(); startBenchmark();">
+    <label>Số lần lặp N: <input name="n_runs" id="n_runs" type="number" value="10" min="1" style="width:40px"></label>
+    <label title="Nhập số tùy ý hoặc chọn gợi ý">Số lần đánh giá:
+      <input name="budget" list="budgetList2" type="number" min="100" value="6000" style="width:70px">
     </label>
-    <label>Chạy
-      <select name="mode"><option value="all">Cả ba</option><option value="spga">SPGA gốc</option><option value="ts">GA-TS</option><option value="sa">GA-SA</option></select>
-    </label>
-    <label>k <input name="k" type="number" step="0.1" min="0" max="1" style="width:54px"></label>
-    <label>σ <input name="sigma" type="number" step="1000" min="0"></label>
-    <button id="goBench" type="submit" class="primary">▶ Chạy Kiểm định</button>
-    <button id="exportBtn" type="button" class="primary2">📥 Xuất Excel (.xlsx)</button>
+    <datalist id="budgetList2">
+      <option value="600"></option><option value="2000"></option><option value="6000"></option><option value="12000"></option>
+    </datalist>
+    <label>k: <input name="k" type="number" value="0.5" step="0.1" min="0" max="1" style="width:40px"></label>
+    <label>σ: <input name="sigma" type="number" value="7000" min="0" style="width:55px"></label>
+    <label>α: <select name="alpha"><option value="0.05">0.05</option><option value="0.01">0.01</option></select></label>
+    <button type="submit" class="primary" id="goBench">▶ Chạy Kiểm định</button>
+    <button type="button" onclick="exportExcel()">📥 Xuất Excel</button>
   </form>
-  <div class="progress"><div class="progress-bar" id="benchBar"></div></div>
-  <p class="hint" id="benchStatus">Chạy nhiều seed để kiểm định thống kê (Friedman, Wilcoxon) và xuất báo cáo Excel.</p>
 
-  <div class="bench-grid">
-    <div class="card">
-      <h2>Thống kê chi tiết</h2>
-      <table id="benchTable"></table>
-      <div id="benchStats" style="margin-top:6px"></div>
+  <div class="toolbar" style="background:#ffffff;">
+    <label>Giả thuyết:</label>
+    <select id="presetHypo" onchange="applyHypoPreset()">
+      <option value="ts_vs_spga" selected>GA-TS vs SPGA gốc</option>
+      <option value="sa_vs_spga">GA-SA vs SPGA gốc</option>
+      <option value="ts_vs_sa">GA-TS vs GA-SA</option>
+      <option value="ml_vs_spga">Matheuristics (GA-LP) vs SPGA gốc</option>
+    </select>
+    <input id="h0_input" type="text" style="flex:1" placeholder="H₀: Giả thuyết Không">
+    <input id="h1_input" type="text" style="flex:1" placeholder="H₁: Giả thuyết Thay thế">
+  </div>
+
+  <div class="progress"><div class="progress-bar" id="benchBar"></div></div>
+  <p class="hint" id="benchStatus">Chạy nhiều seed để kiểm định thống kê (Friedman, Wilcoxon, t-test) và xếp hạng. Cận tối ưu MILP tự chạy nền.</p>
+
+  <div class="grid-2col">
+    <div class="col">
+      <div class="card" style="flex:1.2;">
+        <h2>Hội tụ (realtime) <span id="runTitle"></span></h2>
+        <div class="plot-wrapper"><canvas id="bConvCanvas"></canvas></div>
+      </div>
+      <div class="card" style="flex:1;">
+        <h2>Phân bổ thiết bị theo quý <span id="runSubInfo" class="hint"></span></h2>
+        <div class="plot-wrapper"><canvas id="bPlanCanvas"></canvas></div>
+      </div>
     </div>
-    <div class="card">
-      <h2>Biểu đồ phong cách Crystal Ball</h2>
-      <div class="charts">
-        <figure><img id="chartOverlay" alt="Phân bố tần suất"><figcaption>Phân bố tần suất (Overlay)</figcaption></figure>
-        <figure><img id="chartCdf" alt="CDF"><figcaption>Xác suất tích lũy (CDF)</figcaption></figure>
-        <figure><img id="chartBand" alt="Dải hội tụ"><figcaption>Dải hội tụ (TB ± std, 10–90%)</figcaption></figure>
-        <figure><img id="chartTornado" alt="Tornado" style="display:none"><figcaption id="chartTornadoCap" style="display:none">Tornado độ nhạy</figcaption></figure>
+    <div class="col">
+      <div class="card">
+        <h2>Lịch sử các Runs</h2>
+        <div class="runlist" id="runButtons"></div>
+        <div class="scroll-table" style="max-height:120px;">
+          <table id="leaderTable"></table>
+        </div>
+      </div>
+      <div class="card" style="flex:1.3;">
+        <h2>Kết quả Thống kê &amp; Kiểm định</h2>
+        <div id="statTableBox" class="scroll-table"></div>
+        <div style="margin-top:4px; flex-shrink:0;">
+          <button type="button" id="milpBtn" onclick="runMilp()">🧮 Tính cận tối ưu MILP</button>
+          <span class="hint" id="milpStatus"></span>
+        </div>
       </div>
     </div>
   </div>
 </section>
 
-<!-- ===================== TAB 3: Phân tích độ nhạy ===================== -->
+<!-- ===================== TAB 3: PHÂN TÍCH ĐỘ NHẠY ===================== -->
 <section class="tabpanel" id="tab-sens">
-  <form id="sensForm" class="toolbar" novalidate>
-    <label>k từ <input name="sens_k_min" type="number" step="0.1" min="0" max="1" style="width:54px"></label>
-    <label>đến <input name="sens_k_max" type="number" step="0.1" min="0" max="1" style="width:54px"></label>
-    <label>bước <input name="sens_k_steps" type="number" min="2" style="width:48px"></label>
-    <label>σ từ <input name="sens_sigma_min" type="number" step="500" style="width:70px"></label>
-    <label>đến <input name="sens_sigma_max" type="number" step="500" style="width:70px"></label>
-    <label>bước <input name="sens_sigma_steps" type="number" min="2" style="width:48px"></label>
-    <label>Lần đánh giá
-      <select name="sens_budget"><option value="600">600</option><option value="1500">1500</option><option value="2000">2000</option></select>
-    </label>
-    <button id="goSens" type="submit" class="primary">▶ Chạy Độ nhạy</button>
-  </form>
+  <div class="toolbar">
+    <span class="hint" id="sensStatus">Mở tab này lần đầu sẽ tự chạy quét tham số k ∈ [0,1] và σ ∈ [1000,10000]. Di chuột qua điểm để xem chi tiết.</span>
+    <button type="button" id="sensStop" onclick="stopSens()">■ Dừng quét</button>
+  </div>
   <div class="progress"><div class="progress-bar" id="sensBar"></div></div>
-  <p class="hint" id="sensStatus">Quét tham số k và σ để đo mức đóng góp vào biến động của từng thuật toán.</p>
 
-  <div class="bench-grid">
-    <div class="card">
-      <h2>Mức đóng góp & độ ổn định</h2>
-      <table id="sensTable"></table>
-      <p class="hint" style="margin-top:6px">Đóng góp k/σ = phần phương sai của Z do riêng tham số đó gây ra. Ổn định = mean/std càng cao càng tốt.</p>
+  <div class="grid-2col">
+    <div class="col">
+      <div class="card" style="flex:1;">
+        <h2>Đường cong phản ứng Z theo k (Rủi ro)</h2>
+        <div class="plot-wrapper"><canvas id="sensKCanvas"></canvas></div>
+      </div>
+      <div class="card" style="flex:1;">
+        <h2>Đường cong phản ứng Z theo σ (Biến động Nhu cầu)</h2>
+        <div class="plot-wrapper"><canvas id="sensSigmaCanvas"></canvas></div>
+      </div>
     </div>
-    <div class="card">
-      <h2>Biểu đồ Tornado độ nhạy</h2>
-      <figure style="margin:0"><img id="chartTornado2" alt="Tornado" style="width:100%;border:1px solid var(--line);border-radius:6px"></figure>
+    <div class="col">
+      <div class="card" style="flex:1;">
+        <h2>Bảng Đánh giá &amp; Phân tích Độ nhạy</h2>
+        <div id="sensNarrativeBox" style="font-size:11px; line-height:1.35; border:1px solid #ccc; padding:4px; background:#fafafa; margin-bottom:4px; max-height:100px; overflow-y:auto; white-space:pre-wrap;"></div>
+        <div class="scroll-table"><table id="sensImpactTable"></table></div>
+      </div>
     </div>
   </div>
 </section>
 
+<div id="tooltip"></div>
+
+<!-- ===================== DIALOGS ===================== -->
 <dialog id="lsDialog">
   <h2>Tham số tìm kiếm cục bộ</h2>
-  <p class="hint" style="margin-bottom:8px">Giá trị mặc định là cấu hình của thực nghiệm chính. GA-TS và GA-SA dùng chung điểm kích hoạt.</p>
-  <div class="grid">
+  <p class="hint" style="margin-bottom:6px">Giá trị mặc định là cấu hình của thực nghiệm chính. GA-TS và GA-SA dùng chung điểm kích hoạt.</p>
+  <div class="dialog-grid">
     <h3>Dùng chung</h3>
     <label for="ls_freq">Chạy mỗi … thế hệ</label><input id="ls_freq" form="f" name="ls_freq" type="number" min="1">
     <label for="ls_top">Số cá thể tốt nhất</label><input id="ls_top" form="f" name="ls_top" type="number" min="1">
@@ -252,52 +430,70 @@ dialog .close{margin-top:12px;background:var(--spga);color:#fff;border:0;border-
     <h3>GA-SA</h3>
     <label for="sa_p0">Xác suất nhận bước tệ ban đầu (p0)</label><input id="sa_p0" form="f" name="sa_p0" type="number" step="0.1" min="0.01" max="0.99">
   </div>
-  <button class="close" type="button">Đóng</button>
+  <div style="text-align:right; margin-top:8px;">
+    <button class="close" type="button">Đóng</button>
+  </div>
 </dialog>
 
 <dialog id="howDialog">
   <h2>Cách hoạt động</h2>
   <p>Bài toán: chọn danh mục máy kiểm thử (3 tester, 4 handler) và phân bổ sản lượng cho 3 sản phẩm trong 8 quý. Mỗi phương án được chấm trên 30 kịch bản nhu cầu bằng <b>Z = (1−k)·lợi nhuận trung bình − k·MAD</b>.</p>
-  <h3 style="color:var(--spga)">SPGA gốc</h3>
+  <h3>SPGA gốc</h3>
   <p>GA thuần: quần thể 30, chọn lọc tournament 2, lai ghép hybrid (pc 0,9), đột biến uniform (pm 0,05), giữ 1 cá thể tốt nhất.</p>
-  <h3 style="color:var(--ts-ink)">GA-TS: GA + Tabu Search</h3>
+  <h3>GA-TS: GA + Tabu Search</h3>
   <ul>
     <li>Mỗi vòng bốc 5 bước lân cận hợp lệ, đánh giá cả 5, rồi đi tới bước tốt nhất không bị cấm, kể cả khi bước đó tệ hơn nghiệm hiện tại.</li>
     <li>Bước ngược của bước vừa đi bị cấm trong 7 vòng. Aspiration: bước bị cấm vẫn được đi nếu vượt Z tốt nhất từ trước tới giờ.</li>
     <li>Điểm mới: một danh sách tabu dùng chung cho 3 cá thể trong cùng thế hệ, reset ở mỗi lần kích hoạt.</li>
   </ul>
-  <h3 style="color:var(--sa-ink)">GA-SA: GA + Simulated Annealing</h3>
+  <h3>GA-SA: GA + Simulated Annealing</h3>
   <ul>
     <li>Mỗi vòng bốc 1 bước hợp lệ. Nhận nếu không tệ hơn, hoặc với xác suất exp(Δ/T).</li>
     <li>T0 ước lượng một lần từ 30 bước ngẫu nhiên, sao cho bước tệ điển hình được nhận 50% lúc đầu. 30 lần này tính vào ngân sách.</li>
     <li>Làm nguội theo cấp số nhân, đến lần đánh giá cuối thì T = 0,01·T0.</li>
   </ul>
+  <h3>Matheuristics (GA-LP): GA + LP</h3>
+  <ul>
+    <li>Phân rã bài toán: GA chỉ tìm phương án máy (63 gen: mua tester/handler, thuê theo quý), không chứa gen sản lượng.</li>
+    <li>Mỗi lần đánh giá, LP (HiGHS) tối ưu phân bổ sản lượng Q* cho đúng phương án máy đó — fitness là Z chính xác của phương án.</li>
+    <li>Mọi phương án máy đều khả thi nên không cần bước sửa nghiệm (repair).</li>
+  </ul>
   <h3>So sánh công bằng</h3>
-  <p>Cả ba dùng chung tham số GA, 6000 lần đánh giá (tính cả tìm kiếm cục bộ), 30 kịch bản và seed 1 đến 10. GA-TS và GA-SA cùng kích hoạt mỗi 10 thế hệ cho 3 cá thể tốt nhất, tối đa 20 lần đánh giá mỗi cá thể, cùng 174 bước lân cận, và cùng ghi vào quần thể nghiệm tốt nhất gặp được nên không bao giờ làm tệ cá thể.</p>
-  <button class="close" type="button">Đóng</button>
+  <p>Bốn thuật toán dùng chung ngân sách đánh giá (mỗi lần đánh giá của GA-LP = 1 lần giải LP), 30 kịch bản và các seed giống nhau. GA-TS và GA-SA cùng kích hoạt mỗi 10 thế hệ cho 3 cá thể tốt nhất, tối đa 20 lần đánh giá mỗi cá thể, cùng 174 bước lân cận, và cùng ghi vào quần thể nghiệm tốt nhất gặp được nên không bao giờ làm tệ cá thể.</p>
+  <div style="text-align:right; margin-top:8px;">
+    <button class="close" type="button">Đóng</button>
+  </div>
 </dialog>
 
 <script>
 "use strict";
-const C = {spga:"#1F3A93", spgaSoft:"#8FA3D9", ts:"#E07B39", tsSoft:"#F2B48A", sa:"#2E8B57", saSoft:"#9CCFB2",
-  grid:"#e6e9f0", ink:"#1d2433", muted:"#667085"};
-const INK = {spga:"#1F3A93", ts:"#B54E12", sa:"#1E7B4A"};
-const NAME = {spga:"SPGA", ts:"GA-TS", sa:"GA-SA"};
-const ALGOS = ["spga","ts","sa"];
-const LABEL = {spga:"SPGA gốc", ts:"GA-TS", sa:"GA-SA"};
+// ------------------------------------------------------------- color coding nhất quán + nét vẽ từng thuật toán
+// SPGA xanh, GA-TS cam, GA-SA xanh lá, GA-LP tím; MILP vàng sẫm nét đứt
+const C = {spga:"#1F3A93", spgaSoft:"#8FA3D9", ts:"#E07B39", tsSoft:"#F2B48A",
+  sa:"#2E8B57", saSoft:"#9CCFB2", ml:"#7B2FBE", mlSoft:"#C9A6E8",
+  grid:"#e0e0e0", ink:"#000000", muted:"#555555", milp:"#B8860B"};
+const INK = {spga:"#1F3A93", ts:"#B54E12", sa:"#1E7B4A", ml:"#5E239D"};
+const DASH = {spga:[], ts:[4,3], sa:[2,2], ml:[6,2]};
+const NAME = {spga:"SPGA", ts:"GA-TS", sa:"GA-SA", ml:"GA-LP"};
+const ALGOS = ["spga","ts","sa","ml"];
+const LABEL = {spga:"SPGA gốc", ts:"GA-TS", sa:"GA-SA", ml:"Matheuristics (GA-LP)"};
+const CODE = {"SPGA gốc":"spga", "GA-TS":"ts", "GA-SA":"sa", "Matheuristics (GA-LP)":"ml"};
 const PARAMS = ["mode","seed","budget","k","sigma","ls_freq","ls_top","ls_max","ts_n_cand","ts_tenure","sa_p0"];
-const BENCH_PARAMS = ["n_runs","budget","mode","k","sigma"];
-const SENS_PARAMS = ["sens_k_min","sens_k_max","sens_k_steps","sens_sigma_min","sens_sigma_max","sens_sigma_steps","sens_budget"];
 const $ = s => document.querySelector(s);
 const fmt = (v, d=2) => (v==null||!isFinite(v)) ? "–" : v.toLocaleString("vi-VN",{minimumFractionDigits:d,maximumFractionDigits:d});
 const signed = (v, d=2) => (v==null||!isFinite(v)) ? "–" : (v>=0?"+":"") + fmt(v,d);
+const pv = (p, d=3) => (p==null||!isFinite(p)) ? "–" : (p < Math.pow(10,-d) ? "<"+fmt(Math.pow(10,-d),d) : fmt(p,d));
+const colOf = a => C[CODE[a]] || "#888";
+const inkOf = a => INK[CODE[a]] || "#333";
+const shortOf = a => NAME[CODE[a]] || a;
+const dashOf = a => DASH[CODE[a]] || [];
 
 // ------------------------------------------------------------- canvas helpers
 function prep(cv){
   const r = window.devicePixelRatio||1, w = cv.clientWidth, h = cv.clientHeight;
   if (cv.width!==Math.round(w*r) || cv.height!==Math.round(h*r)){ cv.width=Math.round(w*r); cv.height=Math.round(h*r); }
   const g = cv.getContext("2d"); g.setTransform(r,0,0,r,0,0); g.clearRect(0,0,w,h);
-  g.font="11px Segoe UI, system-ui, sans-serif"; return [g,w,h];
+  g.font="10px Arial, sans-serif"; return [g,w,h];
 }
 function niceTicks(lo, hi, n=4){
   if (!(hi>lo)) hi = lo + 1;
@@ -305,17 +501,59 @@ function niceTicks(lo, hi, n=4){
   const step = [1,2,2.5,5,10].map(m=>m*mag).find(s=>s>=step0) || 10*mag;
   const t=[]; for(let v=Math.ceil(lo/step)*step; v<=hi+1e-9; v+=step) t.push(+v.toFixed(10)); return t;
 }
-function empty(g,w,h,msg){ g.fillStyle=C.muted; g.textAlign="center"; g.textBaseline="middle"; g.font="13px Segoe UI, sans-serif"; g.fillText(msg,w/2,h/2); }
+function empty(g,w,h,msg){ g.fillStyle=C.muted; g.textAlign="center"; g.textBaseline="middle"; g.font="12px Arial, sans-serif"; g.fillText(msg,w/2,h/2); }
 function yGrid(g,w,pad,Y,lo,hi,d){
   g.strokeStyle=C.grid; g.fillStyle=C.muted; g.lineWidth=1; g.textAlign="right"; g.textBaseline="middle";
   for (const t of niceTicks(lo,hi)){ g.beginPath(); g.moveTo(pad.l,Y(t)); g.lineTo(w-pad.r,Y(t)); g.stroke(); g.fillText(fmt(t,d),pad.l-5,Y(t)); }
 }
 
-// ------------------------------------------------------------- state
+// ------------------------------------------------------------- vẽ đường đa chuỗi dùng chung (grayscale, nét đứt)
+function drawLines(g,w,h, series, xMax, xDec, opts={}){
+  const all = series.flatMap(s=>s.pts.map(p=>p[1]));
+  if (!all.length) return empty(g,w,h,"Chưa có dữ liệu");
+  let lo=Math.min(...all), hi=Math.max(...all);
+  if (opts.milp != null){ lo=Math.min(lo,opts.milp); hi=Math.max(hi,opts.milp); }
+  const m=(hi-lo)*0.08||0.5; lo-=m; hi+=m;
+  const pad={l:46,r:104,t:6,b:20};
+  const X=v=>pad.l+v/(xMax||1)*(w-pad.l-pad.r), Y=v=>h-pad.b-(v-lo)/(hi-lo)*(h-pad.t-pad.b);
+  yGrid(g,w,pad,Y,lo,hi,Math.abs(hi-lo)<5?1:0);
+  g.fillStyle=C.muted; g.textAlign="center"; g.textBaseline="top";
+  for(const t of niceTicks(0,xMax,5)) g.fillText(fmt(t, xDec), X(t), h-pad.b+4);
+  for(const s of series){
+    if(!s.pts.length) continue;
+    g.strokeStyle=colOf(s.a); g.lineWidth=2; g.setLineDash(dashOf(s.a));
+    g.beginPath();
+    s.pts.forEach(([x,y],i)=> i?g.lineTo(X(x),Y(y)):g.moveTo(X(x),Y(y)));
+    g.stroke();
+  }
+  g.setLineDash([]);
+  if (opts.dots){
+    for (const s of series){
+      g.fillStyle = colOf(s.a);
+      s.pts.forEach(([x,y]) => { g.beginPath(); g.arc(X(x),Y(y),2.6,0,7); g.fill(); });
+    }
+    if (opts.hit && series.length) for (const [x,] of series[0].pts) opts.hit.push({x_px:X(x), x_val:x});
+  }
+  const ends=series.filter(s=>s.pts.length).map(s=>{const p=s.pts[s.pts.length-1];return{a:s.a,x:X(p[0]),y:Y(p[1]),v:p[1]};}).sort((p,q)=>p.y-q.y);
+  const gap=15, top=pad.t+10, bottom=h-pad.b-8;
+  for(let i=1;i<ends.length;i++) ends[i].y=Math.max(ends[i].y,ends[i-1].y+gap);
+  const over=ends.length?ends[ends.length-1].y-bottom:0; if(over>0) ends.forEach(e=>e.y-=over);
+  if(ends.length&&ends[0].y<top){const sh=top-ends[0].y; ends.forEach(e=>e.y+=sh);}
+  g.font="bold 10px Arial, sans-serif"; g.textAlign="left"; g.textBaseline="middle";
+  for(const e of ends){ g.fillStyle=inkOf(e.a); g.fillText(shortOf(e.a)+" "+fmt(e.v)+"tr", e.x+5, e.y-6); }
+  if (opts.milp != null){
+    g.save(); g.setLineDash([8,4]); g.strokeStyle=C.milp; g.lineWidth=1.6;
+    g.beginPath(); g.moveTo(pad.l, Y(opts.milp)); g.lineTo(w-pad.r, Y(opts.milp)); g.stroke(); g.restore();
+    g.fillStyle=C.milp; g.textAlign="right"; g.textBaseline="bottom";
+    g.font="bold 10px Arial, sans-serif";
+    g.fillText("MILP "+fmt(opts.milp)+" tr", w-pad.r-2, Y(opts.milp)-3);
+  }
+}
+
+// ------------------------------------------------------------- state + charts (Tab 1)
 let S = null, es = null, defaults = {}, budget = 6000, RES = null;
 const freshAlgo = () => ({hist:[], plan:null, lsMarks:[], done:null, best:null, evals:0, gen:0, steps:0, worse:0, aspiration:0, blocked:0});
 
-// ------------------------------------------------------------- charts
 function drawConv(){
   const [g,w,h] = prep($("#cConv"));
   let series = null, xMax = budget;
@@ -327,6 +565,8 @@ function drawConv(){
   if (!series || !series.some(s=>s.pts.length)) return empty(g,w,h,"Bấm ▶ Chạy để bắt đầu");
   const all = series.flatMap(s=>s.pts.map(p=>p[1])).sort((x,y)=>x-y);
   let lo = all[Math.floor(all.length*0.05)], hi = all[all.length-1];
+  const mz = (S?.milp && S.k!=null && milpMatchK(S.milp, S.k, S.sigma)) ? S.milp.z_opt/1e6 : null;
+  if (mz != null) hi = Math.max(hi, mz);
   const m = (hi-lo)*0.08||0.5; lo-=m; hi+=m;
   const pad = {l:44,r:100,t:6,b:20};
   const X = v => pad.l + v/(xMax||1)*(w-pad.l-pad.r), Y = v => h-pad.b-(v-lo)/(hi-lo)*(h-pad.t-pad.b);
@@ -336,21 +576,30 @@ function drawConv(){
   g.save(); g.beginPath(); g.rect(pad.l,pad.t,w-pad.l-pad.r+2,h-pad.t-pad.b); g.clip();
   for (const s of series){
     if (!s.pts.length) continue;
-    g.strokeStyle=C[s.a]; g.lineWidth=2.2; g.beginPath();
+    g.strokeStyle=C[s.a]; g.lineWidth=2; g.setLineDash(DASH[s.a]);
+    g.beginPath();
     s.pts.forEach(([n,f],i)=>{ if(!i) g.moveTo(X(n),Y(f)); else { if(s.step) g.lineTo(X(n),Y(s.pts[i-1][1])); g.lineTo(X(n),Y(f)); } });
     g.stroke();
     g.fillStyle=C[s.a];
     for (const [n,f] of s.marks){ g.beginPath(); g.arc(X(n),Y(f),2.6,0,7); g.fill(); }
   }
+  g.setLineDash([]);
   g.restore();
   const ends = series.filter(s=>s.pts.length).map(s=>{ const p=s.pts[s.pts.length-1]; return {a:s.a, x:X(p[0]), y:Y(p[1]), v:p[1]}; }).sort((p,q)=>p.y-q.y);
-  const gap = 28, top = pad.t+12, bottom = h-pad.b-12;
+  const gap = 24, top = pad.t+12, bottom = h-pad.b-12;
   for (let i=1;i<ends.length;i++) ends[i].y = Math.max(ends[i].y, ends[i-1].y+gap);
   const over = ends.length ? ends[ends.length-1].y-bottom : 0;
   if (over>0) ends.forEach(e=>e.y-=over);
   if (ends.length && ends[0].y<top){ const shift=top-ends[0].y; ends.forEach(e=>e.y+=shift); }
-  g.font="600 12px Segoe UI, system-ui, sans-serif"; g.textAlign="left"; g.textBaseline="middle";
+  g.font="bold 11px Arial, sans-serif"; g.textAlign="left"; g.textBaseline="middle";
   for (const e of ends){ g.fillStyle=INK[e.a]; g.fillText(NAME[e.a],e.x+6,e.y-7); g.fillText(fmt(e.v)+" tr",e.x+6,e.y+7); }
+  if (mz != null){
+    g.save(); g.setLineDash([8,4]); g.strokeStyle=C.milp; g.lineWidth=1.6;
+    g.beginPath(); g.moveTo(pad.l, Y(mz)); g.lineTo(w-pad.r, Y(mz)); g.stroke(); g.restore();
+    g.fillStyle=C.milp; g.textAlign="right"; g.textBaseline="bottom";
+    g.font="bold 10px Arial, sans-serif";
+    g.fillText("MILP "+fmt(mz)+" tr", w-pad.r-2, Y(mz)-3);
+  }
 }
 function drawPlan(a){
   const [g,w,h] = prep($("#cPlan_"+a)), P = S?.a[a].plan;
@@ -367,29 +616,28 @@ function drawPlan(a){
     g.fillStyle=C[a+"Soft"]; g.fillRect(x,Y(P.owned[i]+P.rented[i]),ww,Y(P.owned[i])-Y(P.owned[i]+P.rented[i]));
     g.fillStyle=C.muted; g.textAlign="center"; g.textBaseline="top"; g.fillText(String(i+1),x+ww/2,h-pad.b+3);
   }
-  g.strokeStyle=C.ink; g.lineWidth=2; g.beginPath();
+  g.strokeStyle=C.ink; g.lineWidth=1.6; g.beginPath();
   P.need.forEach((v,i)=>{ const x=pad.l+i*bw+bw/2; i?g.lineTo(x,Y(v)):g.moveTo(x,Y(v)); }); g.stroke();
 }
 function redraw(){ drawConv(); ALGOS.forEach(drawPlan); }
-new ResizeObserver(redraw).observe(document.body);
 
-// ------------------------------------------------------------- điểm số + bảng
+// ------------------------------------------------------------- bảng + chạy đơn
 function bestAtEvals(st, n){ let v=null; for(const [e,f] of st.hist){ if(e<=n) v=f; else break; } return v; }
 function updateScores(){
   for (const a of ALGOS){
     const st = S.a[a], on = S.algos.includes(a);
     $("#z_"+a).textContent = on && st.best!=null ? fmt(st.best)+" tr" : "–";
     $("#sub_"+a).textContent = !on ? "Không chạy" : st.done ? `Xong · ${st.gen} thế hệ · ${fmt(st.done.runtime,1)} giây` : `Thế hệ ${st.gen} · ${st.evals}/${budget} lần đánh giá`;
-    $("#bar_"+a).style.width = on ? Math.min(100,100*st.evals/budget)+"%" : "0";
+    $("#bar_"+a).style.width = on ? Math.min(100,100*st.evals/budget)+"%" : "0%";
   }
-  for (const a of ["ts","sa"]){
+  for (const a of ["ts","sa","ml"]){
     const el = $("#d_"+a); el.textContent = "";
     if (!S.algos.includes(a) || !S.algos.includes("spga")) continue;
     const n = Math.min(S.a.spga.evals, S.a[a].evals), fa = bestAtEvals(S.a.spga,n), fb = bestAtEvals(S.a[a],n);
     if (fa==null || fb==null) continue;
     const d = fb-fa;
-    el.textContent = `${signed(d)} tr so với gốc (${signed(100*d/Math.abs(fa))}%)`;
-    el.style.color = d>=0 ? INK.sa : "var(--red)";
+    el.textContent = `${signed(d)} tr (${signed(100*d/Math.abs(fa))}%)`;
+    el.style.color = d>=0 ? "#1E7B4A" : "#B00020";
   }
 }
 function row(label, vals, d, dir){
@@ -402,45 +650,44 @@ function renderTable(){
   const on = a => S && S.algos.includes(a);
   const pick = f => ALGOS.map(a => on(a) ? f(S.a[a]) : null);
   const sum = xs => xs ? xs.reduce((x,y)=>x+y,0) : null;
-  let html = '<tr class="sec"><td colspan="4">Lần chạy này</td></tr>';
+  let html = '<tr class="sec"><td colspan="5">Lần chạy này</td></tr>';
   html += row("Z tốt nhất (triệu)", pick(s=>s.best), 2, 1);
   html += row("Lợi nhuận TB (triệu)", pick(s=>s.plan?.mean), 2, 1);
   html += row("Rủi ro MAD (triệu)", pick(s=>s.plan?.mad), 2, -1);
   html += row("Tester mua (máy)", pick(s=>sum(s.plan?.K_m)), 0, 0);
   html += row("Tester thuê (máy·quý)", pick(s=>sum(s.plan?.rented)), 0, 0);
-  html += row("Bước tệ hơn đã đi", ALGOS.map(a => on(a)&&a!=="spga" ? S.a[a].worse : null), 0, 0);
-  if (RES?.available && RES.summary && ALGOS.every(a=>RES.summary[LABEL[a]])){
-    const m = a => RES.summary[LABEL[a]], n = m("spga").n;
-    html += `<tr class="sec"><td colspan="4">Thực nghiệm đã lưu (${n} seed)</td></tr>`;
-    html += row("Z trung bình (triệu)", ALGOS.map(a=>m(a).fitness_mean), 2, 1);
-    html += row("Độ lệch chuẩn (triệu)", ALGOS.map(a=>m(a).fitness_std), 2, -1);
-    html += row("Z trên kịch bản kiểm tra", ALGOS.map(a=>m(a).test_mean), 2, 1);
+  html += row("Bước tệ hơn đã đi", ALGOS.map(a => on(a)&&(a==="ts"||a==="sa") ? S.a[a].worse : null), 0, 0);
+  const savedAlgs = RES?.summary ? ALGOS.filter(a=>RES.summary[LABEL[a]]) : [];
+  if (RES?.available && savedAlgs.length){
+    const m = a => RES.summary[LABEL[a]], n = m(savedAlgs[0]).n;
+    html += `<tr class="sec"><td colspan="5">Thực nghiệm đã lưu (${n} seed)</td></tr>`;
+    html += row("Z trung bình (triệu)", ALGOS.map(a=>savedAlgs.includes(a)?m(a).fitness_mean:null), 2, 1);
+    html += row("Độ lệch chuẩn (triệu)", ALGOS.map(a=>savedAlgs.includes(a)?m(a).fitness_std:null), 2, -1);
+    html += row("Z trên kịch bản kiểm tra", ALGOS.map(a=>savedAlgs.includes(a)?m(a).test_mean:null), 2, 1);
   }
   $("#tb").innerHTML = html;
 }
 function renderStatLine(){
-  const t = RES?.stats; if (!t) return;
+  const t = RES?.stats; if (!t){ $("#statLine").textContent = ""; return; }
   const fr = t.match(/Friedman.*?p=([\d.]+)/);
   const holm = (a,b) => t.match(new RegExp(`Wilcoxon ${a} vs ${b}:.*?p_Holm=([\\d.]+)`));
   const parts = [];
-  if (fr) parts.push(`Friedman p = ${fmt(+fr[1],3)}`);
+  if (fr) parts.push(`Friedman p = ${pv(+fr[1])}`);
   const ts = holm("GA-TS","SPGA gốc"), sa = holm("GA-SA","SPGA gốc"), tsa = holm("GA-TS","GA-SA");
-  if (ts) parts.push(`TS vs gốc p = ${fmt(+ts[1],3)}`);
-  if (sa) parts.push(`SA vs gốc p = ${fmt(+sa[1],3)}`);
-  if (tsa) parts.push(`TS vs SA p = ${fmt(+tsa[1],3)}`);
+  if (ts) parts.push(`TS vs gốc p = ${pv(+ts[1])}`);
+  if (sa) parts.push(`SA vs gốc p = ${pv(+sa[1])}`);
+  if (tsa) parts.push(`TS vs SA p = ${pv(+tsa[1])}`);
   $("#statLine").textContent = parts.length ? "Wilcoxon-Holm · " + parts.join(" · ") : "";
 }
 function addFeed(d){
   const box = $("#feed"); if (box.querySelector(".hint")) box.innerHTML = "";
   const lines = [];
   for (const e of d.ls){
-    for (const s of e.steps) lines.push(`<li class="${s.kind}"><span class="${d.algo}">${NAME[d.algo]}</span> · TH ${d.gen} · hạng ${e.rank}: ${s.msg.replace(/(\d)\.(\d)/g,"$1,$2")}</li>`);
+    for (const s of e.steps) lines.push(`<li>${NAME[d.algo]} · TH ${d.gen} · hạng ${e.rank}: ${s.msg.replace(/(\d)\.(\d)/g,"$1,$2")}</li>`);
   }
   box.insertAdjacentHTML("afterbegin", lines.reverse().join(""));
   while (box.children.length>40) box.lastChild.remove();
 }
-
-// ------------------------------------------------------------- chạy đơn
 const form = $("#f");
 function running(on){
   $("#go").textContent = on ? "■ Dừng" : "▶ Chạy"; $("#go").classList.toggle("running",on);
@@ -452,11 +699,13 @@ function start(){
   for (const k of PARAMS) if (form.elements[k].value!=="") q.set(k, form.elements[k].value);
   budget = +q.get("budget");
   $("#convTitle").textContent = "Hội tụ của lần chạy này";
-  $("#convHint").textContent = "Đường càng cao càng tốt. Chấm tròn là lúc tìm kiếm cục bộ chạy.";
-  $("#feed").innerHTML = '<li class="hint">Đang chờ lần tìm kiếm cục bộ đầu tiên…</li>';
-  S = {algos:[], a:{spga:freshAlgo(), ts:freshAlgo(), sa:freshAlgo()}};
-  running(true); renderTable(); redraw();
+  $("#convHint").textContent = "Đường càng cao càng tốt. Đường nét đứt xám là cận tối ưu toàn cục MILP.";
+  $("#feed").innerHTML = '<li class="hint" style="padding:4px">Đang chờ lần tìm kiếm cục bộ đầu tiên…</li>';
+  S = {algos:[], a:{spga:freshAlgo(), ts:freshAlgo(), sa:freshAlgo(), ml:freshAlgo()},
+       k:+q.get("k"), sigma:+q.get("sigma"), milp:null};
+  running(true); renderTable(); renderStatLine(); redraw();
   es = new EventSource("/api/run?"+q.toString());
+  startMilpPoll();
   es.addEventListener("start", e => { S.algos = JSON.parse(e.data).algos; updateScores(); renderTable(); redraw(); });
   es.addEventListener("gen", e => {
     const d = JSON.parse(e.data), st = S.a[d.algo];
@@ -485,125 +734,333 @@ $("#openHow").onclick = () => $("#howDialog").showModal();
 document.querySelectorAll("dialog .close").forEach(b => b.onclick = () => b.closest("dialog").close());
 
 // ------------------------------------------------------------- điều hướng tab
-function switchTab(t){
-  document.querySelectorAll(".tab").forEach(x => x.classList.toggle("active", x.dataset.tab === t));
-  document.querySelectorAll(".tabpanel").forEach(x => x.classList.toggle("active", x.id === "tab-"+t));
-  if (t === "single") redraw();
+function switchTab(tabId){
+  tooltip.style.display = "none";
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.tabpanel').forEach(p => p.classList.remove('active'));
+  document.getElementById('t-' + tabId).classList.add('active');
+  document.getElementById('tab-' + tabId).classList.add('active');
+  if (tabId === "single") redraw();
+  if (tabId === "bench") redrawBench();
+  if (tabId === "sens"){ drawSensLines(); if (!sensAutoStarted){ sensAutoStarted = true; startSensAuto(); } }
 }
-document.querySelectorAll(".tab").forEach(b => b.onclick = () => switchTab(b.dataset.tab));
 
-// ------------------------------------------------------------- kiểm định lặp
-const benchForm = $("#benchForm");
+// ------------------------------------------------------------- giả thuyết
+function applyHypoPreset(){
+  const val = document.getElementById("presetHypo").value;
+  const h0 = document.getElementById("h0_input");
+  const h1 = document.getElementById("h1_input");
+  if (val === "ts_vs_spga"){
+    h0.value = "GA-TS có hiệu năng Z trung bình không khác biệt so với SPGA gốc";
+    h1.value = "GA-TS có hiệu năng Z trung bình vượt trội hơn SPGA gốc có ý nghĩa thống kê";
+  } else if (val === "sa_vs_spga"){
+    h0.value = "GA-SA có hiệu năng Z trung bình không khác biệt so với SPGA gốc";
+    h1.value = "GA-SA có hiệu năng Z trung bình vượt trội hơn SPGA gốc có ý nghĩa thống kê";
+  } else if (val === "ts_vs_sa"){
+    h0.value = "GA-TS có hiệu năng Z trung bình không khác biệt so với GA-SA";
+    h1.value = "GA-TS có hiệu năng Z trung bình vượt trội hơn GA-SA có ý nghĩa thống kê";
+  } else if (val === "ml_vs_spga"){
+    h0.value = "Matheuristics (GA-LP) có hiệu năng Z trung bình không khác biệt so với SPGA gốc";
+    h1.value = "Matheuristics (GA-LP) có hiệu năng Z trung bình vượt trội hơn SPGA gốc có ý nghĩa thống kê";
+  }
+}
+
+// ------------------------------------------------------------- kiểm định lặp (Tab 2)
 let esBench = null;
+let bench = { algos:[], n_runs:10, budget:6000, current:{}, currentSeed:0, runs:{}, runOrder:[],
+              selectedSeed:null, leaderboard:[], summary:null, conclusion:"", milp:null, params:{k:0.5, sigma:7000} };
+const benchForm = $("#benchForm");
+
+// ------------------------------------------------------------- cận tối ưu MILP (server tự chạy nền)
+let milpData = null, milpPoll = null;
+function milpMatchK(m, k, sigma){ return m && !m.error && Math.abs(m.k - k) < 1e-9 && Math.abs(m.sigma - sigma) < 1e-6; }
+function stopMilpPoll(){ if (milpPoll){ clearInterval(milpPoll); milpPoll = null; } }
+function startMilpPoll(){
+  stopMilpPoll();
+  milpPoll = setInterval(async () => {
+    try {
+      const j = await (await fetch("/api/milp/status")).json();
+      if (j.running) return;
+      stopMilpPoll();
+      if (j.result && !j.result.error){
+        milpData = j.result;
+        if (S && milpMatchK(j.result, S.k, S.sigma)){ S.milp = j.result; redraw(); }
+        if (bench && milpMatchK(j.result, bench.params.k, bench.params.sigma)){
+          bench.milp = j.result;
+          $("#milpStatus").textContent = `Z_opt = ${fmt(j.result.z_opt/1e6)} tr (${j.result.status}, ${fmt(j.result.solve_time_s,1)}s)`;
+          renderBenchStats(); redrawBench();
+        }
+      }
+    } catch(e){ stopMilpPoll(); }
+  }, 3000);
+}
+
 function benchRunning(on){
   $("#goBench").textContent = on ? "■ Dừng" : "▶ Chạy Kiểm định";
   $("#goBench").classList.toggle("running", on);
-  $("#exportBtn").disabled = on;
+  $("#milpBtn").disabled = on;
   [...benchForm.elements].filter(x=>x.name).forEach(x=>x.disabled=on);
 }
 function stopBench(){ if(esBench){ esBench.close(); esBench=null; } benchRunning(false); }
-function renderBenchTable(s){
+
+function benchView(){
+  if (bench.selectedSeed && bench.runs[bench.selectedSeed]){
+    return { seed: bench.selectedSeed, detail: bench.runs[bench.selectedSeed] };
+  }
+  return { seed: bench.currentSeed, detail: null };
+}
+function bestAlgoOf(detail){
+  if (!bench.algos.length || !detail) return null;
+  return bench.algos.reduce((b,a)=> detail.algorithms[a].fitness > detail.algorithms[b].fitness ? a : b, bench.algos[0]);
+}
+function drawBenchConv(){
+  const [g,w,h] = prep($("#bConvCanvas"));
+  const v = benchView();
+  let series = [];
+  if (v.detail){
+    series = bench.algos.map(a => { const d=v.detail.algorithms[a]; return d?.history ? {a, pts:d.history.map(p=>[p[0], p[1]/1e6])} : {a, pts:[]}; });
+  } else if (v.seed){
+    series = bench.algos.map(a => { const st=bench.current[a]; return st?.hist?.length ? {a, pts:st.hist} : {a, pts:[]}; });
+  }
+  drawLines(g,w,h, series, bench.budget || 6000, 0,
+    {milp: (bench.milp && milpMatchK(bench.milp, bench.params.k, bench.params.sigma)) ? bench.milp.z_opt/1e6 : null});
+}
+function drawBenchPlan(){
+  const [g,w,h] = prep($("#bPlanCanvas"));
+  const v = benchView();
+  let P = null, code = "spga";
+  if (v.detail){
+    const best = bestAlgoOf(v.detail);
+    P = v.detail.algorithms[best]?.plan || null;
+    if (best) code = CODE[best] || "spga";
+  } else if (v.seed){
+    let best = null, bz = -Infinity;
+    for (const a of bench.algos){
+      const st = bench.current[a];
+      const z = st?.hist?.length ? st.hist[st.hist.length-1][1] : -Infinity;
+      if (z > bz){ bz = z; best = a; }
+    }
+    if (best){ P = bench.current[best]?.plan || null; code = CODE[best] || "spga"; }
+  }
+  if (!P) return empty(g,w,h,"Chưa có phương án");
+  const hi = Math.max(...P.owned.map((o,i)=>o+P.rented[i]), ...P.need)*1.1||1;
+  const pad={l:24,r:2,t:4,b:18}, Y=vv=>h-pad.b-vv/hi*(h-pad.t-pad.b);
+  yGrid(g,w,pad,Y,0,hi,0);
+  const n=P.owned.length, bw=(w-pad.l-pad.r)/n;
+  for(let i=0;i<n;i++){
+    const x=pad.l+i*bw+bw*0.15, ww=bw*0.7;
+    g.fillStyle=C[code]; g.fillRect(x,Y(P.owned[i]),ww,Y(0)-Y(P.owned[i]));
+    g.fillStyle=C[code+"Soft"]; g.fillRect(x,Y(P.owned[i]+P.rented[i]),ww,Y(P.owned[i])-Y(P.owned[i]+P.rented[i]));
+    g.fillStyle=C.muted; g.textAlign="center"; g.textBaseline="top"; g.fillText(String(i+1),x+ww/2,h-pad.b+3);
+  }
+  g.strokeStyle=C.ink; g.lineWidth=1.6; g.beginPath();
+  P.need.forEach((vv,i)=>{const x=pad.l+i*bw+bw/2; i?g.lineTo(x,Y(vv)):g.moveTo(x,Y(vv));}); g.stroke();
+}
+function updateBenchTitles(){
+  const v = benchView();
+  $("#runTitle").textContent = v.seed ? `Run ${v.seed}/${bench.n_runs}` : "";
+  const info = $("#runSubInfo");
+  if (v.detail){
+    const best = bestAlgoOf(v.detail);
+    if (!best){ info.textContent = ""; return; }
+    const d = v.detail.algorithms[best];
+    info.textContent = `· ${best} · Z = ${fmt(d.fitness/1e6)} tr · LN TB = ${fmt(d.mean_profit/1e6)} tr · MAD = ${fmt(d.mad/1e6)} tr`;
+  } else if (v.seed){
+    info.textContent = `· Run ${v.seed} đang chạy`;
+  } else { info.textContent = ""; }
+}
+function redrawBench(){ drawBenchConv(); drawBenchPlan(); updateBenchTitles(); }
+function renderRunButtons(){
+  const box = $("#runButtons"); box.innerHTML = "";
+  bench.runOrder.forEach(seed => {
+    const b = document.createElement("button");
+    b.textContent = `Run_${seed}`;
+    if (bench.selectedSeed === seed) b.classList.add("active");
+    if (bench.leaderboard.some(e=>e.seed===seed)) b.classList.add("top");
+    b.onclick = () => { bench.selectedSeed = seed; renderRunButtons(); redrawBench(); };
+    box.appendChild(b);
+  });
+}
+function renderLeaderboard(lb){
+  if (!lb || !lb.length){ $("#leaderTable").innerHTML = ""; return; }
+  let html = `<thead><tr><th>Hạng</th><th>Seed</th><th>Thuật toán</th><th>Z (tr)</th></tr></thead><tbody>`;
+  lb.forEach((e,i)=>{ html += `<tr><td>${i+1}</td><td>${e.seed}</td><td><span style="color:${INK[CODE[e.algorithm]]||'#000000'}">${e.algorithm}</span></td><td>${fmt(e.z/1e6)}</td></tr>`; });
+  html += "</tbody>";
+  $("#leaderTable").innerHTML = html;
+}
+function renderBenchStats(){
+  const s = bench.summary;
+  if (!s){ $("#statTableBox").innerHTML = ""; return; }
   const algs = Object.keys(s.per_alg);
   const v = a => s.per_alg[a];
-  let html = `<thead><tr><th>Chỉ số</th>${algs.map(a=>`<th>${a}</th>`).join("")}</tr></thead><tbody>`;
+  let html = `<table><thead><tr><th>Chỉ số</th>${algs.map(a=>`<th style="color:${INK[CODE[a]]||'#000000'}">${a}</th>`).join("")}</tr></thead><tbody>`;
   html += row("Z trung bình (triệu)", algs.map(a=>v(a).mean/1e6), 2, 1);
   html += row("Độ lệch chuẩn (triệu)", algs.map(a=>v(a).std/1e6), 2, -1);
   html += row("Trung vị (triệu)", algs.map(a=>v(a).median/1e6), 2, 1);
   html += row("Nhỏ nhất (triệu)", algs.map(a=>v(a).min/1e6), 2, 0);
   html += row("Lớn nhất (triệu)", algs.map(a=>v(a).max/1e6), 2, 1);
-  html += row("Cải thiện so với gốc (%)", algs.map(a=>v(a).improvement_pct), 2, 1);
-  html += row("Win-rate so với gốc", algs.map(a=>v(a).win_rate), 2, 1);
-  html += "</tbody>";
-  $("#benchTable").innerHTML = html;
-  let st = "";
-  if (s.friedman) st += `<p class="hint">Friedman p = ${fmt(s.friedman.p,4)}</p>`;
-  for (const w of (s.wilcoxon||[])) st += `<p class="hint">Wilcoxon ${w.a} vs ${w.b}: p (Holm) = ${fmt(w.p_holm,4)}</p>`;
-  $("#benchStats").innerHTML = st;
+  html += row("Win-rate so với gốc (%)", algs.map(a=>v(a).win_rate*100), 1, 1);
+  html += "</tbody></table>";
+  let extra = "";
+  if (s.friedman) extra += `<p class="hint" style="margin-top:4px">Friedman p = ${pv(s.friedman.p,4)}</p>`;
+  for (const w of (s.wilcoxon||[])){
+    extra += `<p class="hint">Wilcoxon ${w.a} vs ${w.b}: p (Holm) = ${pv(w.p_holm)} · t-test p = ${pv(w.t_p)} · d = ${fmt(w.effect_size,3)}</p>`;
+  }
+  if (bench.milp && !bench.milp.error){
+    const gap = (bench.milp.z_opt / Math.max(...algs.map(a=>v(a).mean)) - 1) * 100;
+    extra += `<p class="hint" style="font-weight:bold;margin-top:4px">Cận tối ưu toàn cục (MILP): Z = ${fmt(bench.milp.z_opt/1e6)} tr (${bench.milp.status}) — GA tốt nhất cách ${fmt(gap,2)}%</p>`;
+  }
+  if (bench.conclusion){
+    extra += `<p class="hint" style="margin-top:4px;white-space:pre-wrap">${bench.conclusion.replace(/\n/g,"<br>")}</p>`;
+  }
+  $("#statTableBox").innerHTML = html + extra;
 }
-async function loadBenchCharts(){
-  try {
-    const r = await fetch("/api/charts/generate");
-    const j = await r.json();
-    if (j.error){ $("#benchStatus").innerHTML = `<span class="err">${j.error}</span>`; return; }
-    const im = j.images || {};
-    if (im.overlay) $("#chartOverlay").src = im.overlay;
-    if (im.cdf) $("#chartCdf").src = im.cdf;
-    if (im.band) $("#chartBand").src = im.band;
-    if (im.tornado){
-      $("#chartTornado").src = im.tornado; $("#chartTornado").style.display = "";
-      $("#chartTornadoCap").style.display = ""; $("#chartTornado2").src = im.tornado;
-    }
-  } catch(e){ /* im lặng */ }
-}
-async function exportExcel(){
-  try {
-    const r = await fetch("/api/export_excel");
-    if (r.headers.get("content-type").includes("json")){
-      const e = await r.json(); alert(e.error || "Không xuất được báo cáo."); return;
-    }
-    const blob = await r.blob();
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a"); a.href = url; a.download = "bao_cao_kiem_dinh.xlsx"; a.click();
-    URL.revokeObjectURL(url);
-  } catch(e){ alert("Không xuất được báo cáo."); }
-}
-function startBench(){
+function startBenchmark(){
+  if (esBench){ stopBench(); return; }   // bấm lần 2 = dừng
   const q = new URLSearchParams();
-  for (const k of BENCH_PARAMS) if (benchForm.elements[k].value!=="") q.set(k, benchForm.elements[k].value);
-  const n = +benchForm.elements["n_runs"].value || 10;
-  $("#benchStatus").textContent = "Đang kiểm định…"; $("#benchBar").style.width = "0";
+  for (const k of ["n_runs","budget","k","sigma","alpha"]){
+    if (benchForm.elements[k] && benchForm.elements[k].value!=="") q.set(k, benchForm.elements[k].value);
+  }
+  q.set("h0", document.getElementById("h0_input").value || "");
+  q.set("h1", document.getElementById("h1_input").value || "");
+  bench = { algos:[], n_runs:+benchForm.elements["n_runs"].value||10, budget:+benchForm.elements["budget"].value||6000,
+            current:{}, currentSeed:0, runs:{}, runOrder:[], selectedSeed:null, leaderboard:[], summary:null,
+            conclusion:"", milp:null, params:{k:+benchForm.elements["k"].value||0.5, sigma:+benchForm.elements["sigma"].value||7000} };
+  $("#benchStatus").textContent = "Đang kiểm định…"; $("#benchBar").style.width = "0%";
+  $("#milpStatus").textContent = "";
+  $("#leaderTable").innerHTML = ""; $("#statTableBox").innerHTML = "";
+  $("#runButtons").innerHTML = ""; $("#runTitle").textContent = ""; $("#runSubInfo").textContent = "";
   benchRunning(true);
-  esBench = new EventSource("/api/benchmark?"+q.toString());
+  esBench = new EventSource("/api/run-benchmark?"+q.toString());
+  startMilpPoll();
   esBench.addEventListener("start", e => {
     const d = JSON.parse(e.data);
+    bench.algos = d.algorithms; bench.n_runs = d.n_runs; bench.budget = d.budget;
     $("#benchStatus").textContent = `Chạy ${d.n_runs} seed × ${d.algorithms.length} thuật toán (budget ${d.budget})…`;
   });
-  esBench.addEventListener("seed", e => {
+  esBench.addEventListener("run_start", e => {
     const d = JSON.parse(e.data);
-    $("#benchBar").style.width = Math.round(100*d.done/d.total) + "%";
-    const parts = Object.entries(d.fitness).map(([a,f])=>`${a}: ${fmt(f)} tr`).join("  ·  ");
-    $("#benchStatus").textContent = `Seed ${d.seed}/${d.total}: ${parts}`;
+    bench.current = {}; bench.currentSeed = d.seed; bench.selectedSeed = null;
+    for (const a of bench.algos) bench.current[a] = {hist:[], plan:null};
+    $("#benchBar").style.width = "0%";
+    renderRunButtons(); redrawBench();
+  });
+  esBench.addEventListener("gen", e => {
+    const d = JSON.parse(e.data);
+    const st = bench.current[d.algo]; if (!st) return;
+    const last = st.hist[st.hist.length-1];
+    if (!last || last[1]!==d.best) st.hist.push([d.evals, d.best]);
+    if (d.plan) st.plan = d.plan;
+    $("#benchBar").style.width = Math.min(100, 100*d.evals/bench.budget) + "%";
+    redrawBench();
+  });
+  esBench.addEventListener("run_done", e => {
+    const d = JSON.parse(e.data);
+    bench.runs[d.seed] = d;
+    if (!bench.runOrder.includes(d.seed)) bench.runOrder.push(d.seed);
+    bench.selectedSeed = d.seed;
+    $("#benchStatus").textContent = `Xong run ${d.seed}/${d.n} · tốt nhất ${d.best_algo} (${fmt(d.best_z)} tr)`;
+    renderRunButtons(); redrawBench();
   });
   esBench.addEventListener("done", e => {
     const d = JSON.parse(e.data);
+    bench.summary = d.summary; bench.leaderboard = d.leaderboard; bench.conclusion = d.conclusion;
     $("#benchBar").style.width = "100%";
-    renderBenchTable(d.summary);
+    renderLeaderboard(d.leaderboard); renderRunButtons(); renderBenchStats();
     $("#benchStatus").textContent = "Xong. Bấm 📥 Xuất Excel để tải báo cáo.";
-    stopBench(); loadBenchCharts();
+    stopBench();
   });
   esBench.onerror = () => { if(!esBench) return; stopBench();
     $("#benchStatus").innerHTML = '<span class="err">Mất kết nối server, hoặc đang có lần chạy khác.</span>'; };
 }
-benchForm.onsubmit = ev => { ev.preventDefault(); esBench ? stopBench() : startBench(); };
-$("#exportBtn").onclick = exportExcel;
+async function exportExcel(){
+  try {
+    const r = await fetch("/api/export-excel");
+    if (r.headers.get("content-type").includes("json")){ const e = await r.json(); alert(e.error || "Không xuất được báo cáo."); return; }
+    const blob = await r.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a"); a.href = url; a.download = "Bao_Cao_Kiem_Dinh.xlsx"; a.click();
+    URL.revokeObjectURL(url);
+  } catch(e){ alert("Không xuất được báo cáo."); }
+}
+async function runMilp(){
+  const k = +benchForm.elements["k"].value || 0.5;
+  const sigma = +benchForm.elements["sigma"].value || 7000;
+  bench.params = {k, sigma};
+  $("#milpStatus").textContent = "Đang tính (CBC, có thể mất 1-2 phút)…";
+  try {
+    const r = await fetch(`/api/milp?k=${k}&sigma=${sigma}&n_scen=30&scen_seed=2026&time_limit=120`);
+    const j = await r.json();
+    if (j.error){ $("#milpStatus").textContent = j.error; return; }
+    startMilpPoll();
+  } catch(e){ $("#milpStatus").textContent = "Không kết nối được server."; }
+}
 
-// ------------------------------------------------------------- phân tích độ nhạy
-const sensForm = $("#sensForm");
-let esSens = null;
+// ------------------------------------------------------------- phân tích độ nhạy (Tab 3)
+let esSens = null, sensAutoStarted = false;
+let sens = { algos:[], k_grid:[], sigma_grid:[], metrics:{}, impact:[], narrative:"" };
+const tooltip = $("#tooltip");
+let sensHitK = [], sensHitS = [];
+const SENS_AUTO = "sens_k_min=0&sens_k_max=1&sens_k_steps=5&sens_sigma_min=1000&sens_sigma_max=10000&sens_sigma_steps=5&sens_budget=1500";
+
 function sensRunning(on){
-  $("#goSens").textContent = on ? "■ Dừng" : "▶ Chạy Độ nhạy";
-  $("#goSens").classList.toggle("running", on);
-  [...sensForm.elements].filter(x=>x.name).forEach(x=>x.disabled=on);
+  $("#sensStatus").textContent = on ? "Đang quét tham số…" : "Xong.";
 }
-function stopSens(){ if(esSens){ esSens.close(); esSens=null; } sensRunning(false); }
-function renderSensTable(metrics){
-  const algs = Object.keys(metrics);
-  let html = `<thead><tr><th>Chỉ số</th>${algs.map(a=>`<th>${a}</th>`).join("")}</tr></thead><tbody>`;
-  html += row("Đóng góp của k (%)", algs.map(a=>metrics[a].contribution_k*100), 1, 1);
-  html += row("Đóng góp của σ (%)", algs.map(a=>metrics[a].contribution_sigma*100), 1, 1);
-  html += row("Ổn định (mean/std)", algs.map(a=>metrics[a].robustness), 2, 1);
+function stopSens(){ if(esSens){ esSens.close(); esSens=null; } }
+function sensValuesAt(param, value){
+  return sens.impact.filter(r => r.param===param && Math.abs(r.value-value)<1e-9);
+}
+function drawSensLines(){
+  sensHitK.length = 0; sensHitS.length = 0;
+  {
+    const [g,w,h] = prep($("#sensKCanvas"));
+    const series = sens.algos.map(a => ({a, pts:(sens.metrics[a]?.mean_by_k||[]).map((y,i)=>[sens.k_grid[i], y/1e6])}));
+    drawLines(g,w,h, series, Math.max(...sens.k_grid, 1), 1, {dots:true, hit:sensHitK});
+  }
+  {
+    const [g,w,h] = prep($("#sensSigmaCanvas"));
+    const series = sens.algos.map(a => ({a, pts:(sens.metrics[a]?.mean_by_sigma||[]).map((y,i)=>[sens.sigma_grid[i], y/1e6])}));
+    drawLines(g,w,h, series, Math.max(...sens.sigma_grid, 1), 0, {dots:true, hit:sensHitS});
+  }
+}
+function attachTooltip(canvas, hits, param){
+  canvas.addEventListener("mousemove", ev => {
+    const r = canvas.getBoundingClientRect();
+    const mx = ev.clientX - r.left;
+    let best = null, bd = 14;
+    for (const h of hits){ const d = Math.abs(mx - h.x_px); if (d < bd){ bd = d; best = h; } }
+    if (!best){ tooltip.style.display = "none"; return; }
+    const rows = sensValuesAt(param, best.x_val);
+    let html = `<b>${param === "k" ? "k" : "σ"} = ${fmt(best.x_val, param==="k"?2:0)}</b>`;
+    for (const rr of rows){
+      html += `<br>${rr.algorithm}: Z ${fmt(rr.z_mean/1e6)} tr · LN TB ${fmt(rr.profit_mean/1e6)} tr · MAD ${fmt(rr.mad_mean/1e6)} tr`;
+    }
+    tooltip.innerHTML = html;
+    tooltip.style.display = "block";
+    tooltip.style.left = Math.min(ev.clientX + 14, window.innerWidth - 230) + "px";
+    tooltip.style.top = Math.min(Math.max(ev.clientY - 12, 8), window.innerHeight - 90) + "px";
+  });
+  canvas.addEventListener("mouseleave", () => tooltip.style.display = "none");
+}
+function renderSensImpact(){
+  if (!sens.impact.length){ $("#sensImpactTable").innerHTML = ""; return; }
+  let html = `<thead><tr><th>Tham số</th><th>Giá trị</th><th>Thuật toán</th><th>Z TB (tr)</th><th>LN TB (tr)</th><th>MAD (tr)</th><th>Δ%</th></tr></thead><tbody>`;
+  sens.impact.forEach(r => {
+    html += `<tr><td>${r.param==="k"?"k":"σ"}</td><td>${fmt(r.value, r.param==="k"?2:0)}</td><td>${r.algorithm}</td>`+
+            `<td>${fmt(r.z_mean/1e6)}</td><td>${fmt(r.profit_mean/1e6)}</td><td>${fmt(r.mad_mean/1e6)}</td>`+
+            `<td class="${r.delta_pct>=0?"pos":"neg"}">${signed(r.delta_pct,1)}%</td></tr>`;
+  });
   html += "</tbody>";
-  $("#sensTable").innerHTML = html;
+  $("#sensImpactTable").innerHTML = html;
 }
-function startSens(){
-  const q = new URLSearchParams();
-  for (const k of SENS_PARAMS) if (sensForm.elements[k].value!=="") q.set(k, sensForm.elements[k].value);
-  $("#sensStatus").textContent = "Đang quét tham số…"; $("#sensBar").style.width = "0";
-  sensRunning(true);
-  esSens = new EventSource("/api/sensitivity?"+q.toString());
+function startSensAuto(){
+  if (esSens){ esSens.close(); esSens = null; }
+  $("#sensStatus").textContent = "Đang quét tham số…"; $("#sensBar").style.width = "0%";
+  esSens = new EventSource("/api/sensitivity?" + SENS_AUTO);
   esSens.addEventListener("start", e => {
     const d = JSON.parse(e.data);
-    $("#sensStatus").textContent = `${d.total} ô (${d.k_grid.length} giá trị k × ${d.sigma_grid.length} giá trị σ × ${d.algorithms.length} thuật toán)…`;
+    sens.algos = d.algorithms; sens.k_grid = d.k_grid; sens.sigma_grid = d.sigma_grid;
+    $("#sensStatus").textContent = `${d.total} ô (${d.k_grid.length} k × ${d.sigma_grid.length} σ × ${d.algorithms.length} thuật toán)…`;
   });
   esSens.addEventListener("cell", e => {
     const d = JSON.parse(e.data);
@@ -612,26 +1069,31 @@ function startSens(){
   });
   esSens.addEventListener("done", e => {
     const d = JSON.parse(e.data);
+    sens.metrics = d.metrics; sens.impact = d.impact; sens.narrative = d.narrative;
     $("#sensBar").style.width = "100%";
-    renderSensTable(d.metrics);
-    $("#sensStatus").textContent = "Xong.";
-    stopSens(); loadBenchCharts();
+    $("#sensNarrativeBox").textContent = d.narrative;
+    renderSensImpact(); drawSensLines();
+    $("#sensStatus").textContent = "Xong. Di chuột qua các điểm để xem chi tiết từng thuật toán.";
+    stopSens();
   });
   esSens.onerror = () => { if(!esSens) return; stopSens();
-    $("#sensStatus").innerHTML = '<span class="err">Mất kết nối server, hoặc đang có lần chạy khác.</span>'; };
+    $("#sensStatus").innerHTML = '<span class="err">Đang có lần chạy khác (chạy đơn hoặc kiểm định đang giữ server) — hãy đợi xong.</span> <button class="close" onclick="startSensAuto()">▶ Chạy lại</button>'; };
 }
-sensForm.onsubmit = ev => { ev.preventDefault(); esSens ? stopSens() : startSens(); };
+attachTooltip($("#sensKCanvas"), sensHitK, "k");
+attachTooltip($("#sensSigmaCanvas"), sensHitS, "sigma");
 
-// ------------------------------------------------------------- khởi động
+// ------------------------------------------------------------- resize + khởi động
+function redrawAll(){ redraw(); redrawBench(); drawSensLines(); }
+new ResizeObserver(redrawAll).observe(document.body);
+
 (async()=>{
   try { defaults = await (await fetch("/api/defaults")).json(); }
-  catch(e){ $("#statLine").innerHTML = '<span class="err">Không kết nối được server. Hãy mở bằng CHAY_DEMO.bat.</span>'; return; }
+  catch(e){ $("#benchStatus").innerHTML = '<span class="err">Không kết nối được server. Hãy mở bằng CHAY_DEMO.bat.</span>'; return; }
   for (const k of PARAMS) form.elements[k].value = defaults[k];
   budget = defaults.budget;
-  for (const k of BENCH_PARAMS) if (benchForm.elements[k]) benchForm.elements[k].value = defaults[k];
-  for (const k of SENS_PARAMS) if (sensForm.elements[k]) sensForm.elements[k].value = defaults[k];
+  applyHypoPreset();
   try { RES = await (await fetch("/api/results")).json(); } catch(e){ RES = null; }
-  if (RES?.curves){ $("#convTitle").textContent = "Hội tụ trung bình của thực nghiệm đã lưu"; $("#convHint").textContent = "Bấm ▶ Chạy để xem ba thuật toán chạy trực tiếp."; }
+  if (RES?.curves){ $("#convTitle").textContent = "Hội tụ trung bình của thực nghiệm đã lưu"; $("#convHint").textContent = "Bấm ▶ Chạy để xem bốn thuật toán chạy trực tiếp."; }
   renderStatLine(); renderTable(); redraw();
 })();
 </script>

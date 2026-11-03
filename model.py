@@ -132,10 +132,13 @@ def repair(x):
     return encode(d)
 
 
-def sample_scenarios(N=30, seed=0):
-    """N kịch bản nhu cầu chuẩn N(MU, SIGMA), cắt tại 0. Trả về [N, 8, 3]."""
+def sample_scenarios(N=30, seed=0, mu=None, sigma=None):
+    """N kịch bản nhu cầu chuẩn N(MU, SIGMA), cắt tại 0. Trả về [N, 8, 3].
+    mu/sigma tùy chọn để chạy nền an toàn mà không đọc global MU/SIGMA."""
+    mu = MU if mu is None else np.asarray(mu, dtype=float)
+    sig = SIGMA if sigma is None else float(sigma)
     rng = np.random.default_rng(seed)
-    o = rng.normal(MU[None, None, :], SIGMA, size=(N, P, T))
+    o = rng.normal(mu[None, None, :], sig, size=(N, P, T))
     return np.maximum(o, 0.0)
 
 

@@ -1,0 +1,1233 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Hệ thống Đánh giá Thuật toán - Nhóm 8</title>
+<!-- Chart.js qua CDN -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<style>
+* {
+  box-sizing: border-box;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  text-shadow: none !important;
+  transition: none !important;
+  animation: none !important;
+}
+
+html, body {
+  width: 100%;
+  height: 100vh;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  background-color: #ffffff;
+  color: #000000;
+  font-family: Arial, sans-serif;
+  font-size: 11.5px;
+  line-height: 1.25;
+}
+
+body {
+  display: flex;
+  flex-direction: column;
+  padding: 6px 8px;
+  gap: 6px;
+}
+
+/* Header & Tabs */
+header {
+  border-bottom: 2px solid #000000;
+  padding-bottom: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-shrink: 0;
+}
+
+h1 {
+  font-size: 14px;
+  margin: 0;
+  font-weight: bold;
+  color: #000000;
+}
+
+nav.tabs {
+  display: flex;
+  gap: 2px;
+}
+
+nav.tabs .tab {
+  background: #e0e0e0;
+  color: #000000;
+  border: 1px solid #767676;
+  padding: 3px 8px;
+  font-family: Arial, sans-serif;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+nav.tabs .tab.active {
+  background: #ffffff;
+  font-weight: bold;
+  border-bottom: 1px solid #ffffff;
+  margin-bottom: -1px;
+}
+
+/* Tab Panels */
+.tabpanel {
+  display: none;
+  flex: 1;
+  min-height: 0;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.tabpanel.active {
+  display: flex;
+}
+
+/* Toolbar */
+.toolbar {
+  background: #f4f4f4;
+  border: 1px solid #ccc;
+  padding: 4px 6px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  flex-shrink: 0;
+}
+
+.toolbar label {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 11px;
+}
+
+input, select, button {
+  font-family: Arial, sans-serif;
+  font-size: 11px;
+  padding: 2px 4px;
+  border: 1px solid #767676;
+  background: #ffffff;
+  color: #000000;
+  height: 23px;
+}
+
+button {
+  cursor: pointer;
+  background: #e1e1e1;
+}
+
+button:hover {
+  background: #d0d0d0;
+}
+
+button.primary {
+  background: #444444;
+  color: #ffffff;
+  border-color: #000000;
+  font-weight: bold;
+}
+
+button.primary:hover {
+  background: #111111;
+}
+
+button.running {
+  background: #ffffff !important;
+  color: #000000 !important;
+  border: 1px dashed #000000 !important;
+}
+
+/* Score Cards */
+.scores {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.score {
+  border: 1px solid #ccc;
+  background: #fafafa;
+  padding: 4px 6px;
+}
+
+.score .k {
+  font-size: 10.5px;
+  color: #333333;
+  font-weight: bold;
+}
+
+.score .v {
+  font-size: 15px;
+  font-weight: bold;
+  margin: 1px 0;
+}
+
+.score .d {
+  font-size: 10px;
+  color: #555555;
+}
+
+.score .s {
+  font-size: 10px;
+  color: #666666;
+}
+
+.progress {
+  height: 5px;
+  border: 1px solid #767676;
+  background: #ffffff;
+  margin-top: 2px;
+}
+
+.progress-bar {
+  height: 100%;
+  width: 0%;
+  background: #444444;
+}
+
+/* Grids & Cards */
+.main-layout {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: 1.3fr 1fr;
+  gap: 6px;
+}
+
+.grid-2col {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: 1.2fr 1fr;
+  gap: 6px;
+}
+
+.col {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-height: 0;
+}
+
+.card {
+  border: 1px solid #ccc;
+  background: #ffffff;
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.card h2 {
+  font-size: 11.5px;
+  margin: 0 0 3px 0;
+  font-weight: bold;
+  color: #000000;
+  border-bottom: 1px solid #ddd;
+  padding-bottom: 2px;
+  flex-shrink: 0;
+}
+
+.hint {
+  font-size: 10px;
+  color: #555555;
+  margin: 1px 0;
+  flex-shrink: 0;
+}
+
+/* Scaling-Safe Chart Canvas Container */
+.plot-wrapper {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.plot-wrapper canvas {
+  position: absolute !important;
+  top: 0;
+  left: 0;
+  width: 100% !important;
+  height: 100% !important;
+}
+
+.plans-grid {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 4px;
+}
+
+.plan-item {
+  border: 1px solid #ddd;
+  padding: 2px;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.plan-item b {
+  display: block;
+  font-size: 10px;
+  text-align: center;
+  margin-bottom: 2px;
+  flex-shrink: 0;
+}
+
+/* Scroll Containers */
+.scroll-table {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  border: 1px solid #ccc;
+}
+
+table {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 11px;
+}
+
+th, td {
+  border: 1px solid #ccc;
+  padding: 2.5px 4px;
+  text-align: right;
+  white-space: nowrap;
+}
+
+th {
+  background: #eaeaea;
+  font-weight: bold;
+  text-align: center;
+  color: #000000;
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+
+th:first-child, td:first-child {
+  text-align: left;
+  white-space: normal;
+}
+
+td.win {
+  background-color: #e0e0e0;
+  font-weight: bold;
+}
+
+td.pos { color: #000000; font-weight: bold; }
+td.neg { color: #555555; font-style: italic; }
+
+.runlist {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+  margin-bottom: 4px;
+  max-height: 60px;
+  overflow-y: auto;
+  flex-shrink: 0;
+}
+
+.runlist button {
+  padding: 1px 5px;
+  font-size: 10px;
+  height: 20px;
+}
+
+.runlist button.active {
+  background: #000000;
+  color: #ffffff;
+}
+
+#feed {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 10px;
+  border: 1px solid #ccc;
+  background: #fafafa;
+}
+
+#feed li {
+  padding: 2px 4px;
+  border-bottom: 1px solid #eee;
+  font-family: monospace;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+dialog {
+  border: 2px solid #000000;
+  background: #ffffff;
+  padding: 10px 12px;
+  max-width: 540px;
+  width: 90%;
+}
+
+dialog::backdrop {
+  background: rgba(0, 0, 0, 0.3);
+}
+
+.dialog-grid {
+  display: grid;
+  grid-template-columns: 1fr 90px;
+  gap: 4px 8px;
+  align-items: center;
+}
+
+.err {
+  color: #000000;
+  font-weight: bold;
+  background: #eeeeee;
+  padding: 2px 4px;
+  border: 1px solid #777;
+}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>SPGA gốc, GA-TS, GA-SA, GA-LP - Giao diện Đánh giá (Nhóm 8)</h1>
+  <nav class="tabs">
+    <button class="tab active" id="t-single" onclick="switchTab('single')">1. Chạy đơn</button>
+    <button class="tab" id="t-bench" onclick="switchTab('bench')">2. Kiểm định lặp</button>
+    <button class="tab" id="t-sens" onclick="switchTab('sens')">3. Phân tích độ nhạy</button>
+  </nav>
+</header>
+
+<!-- TAB 1: CHẠY ĐƠN -->
+<section class="tabpanel active" id="tab-single">
+  <form id="f" class="toolbar" novalidate>
+    <label>Chế độ:
+      <select name="mode">
+        <option value="all">Cả bốn</option>
+        <option value="spga">SPGA gốc</option>
+        <option value="ts">GA-TS</option>
+        <option value="sa">GA-SA</option>
+        <option value="ml">Matheuristics (GA-LP)</option>
+      </select>
+    </label>
+    <label>Seed: <input name="seed" type="number" style="width:45px"></label>
+    <label>Đánh giá:
+      <input name="budget" list="budgetList" type="number" min="100" style="width:65px">
+      <datalist id="budgetList">
+        <option value="600"></option><option value="2000"></option><option value="6000"></option><option value="12000"></option>
+      </datalist>
+    </label>
+    <label>k: <input name="k" type="number" step="0.1" min="0" max="1" style="width:40px"></label>
+    <label>σ: <input name="sigma" type="number" step="1000" min="0" style="width:55px"></label>
+    <button type="button" id="openLs">Tham số LS</button>
+    <button type="button" id="openHow">Hướng dẫn</button>
+    <button id="go" type="submit" class="primary">▶ Chạy</button>
+  </form>
+
+  <section class="scores">
+    <div class="score">
+      <div class="k">SPGA gốc · Z tốt nhất</div>
+      <div class="v" id="z_spga">–</div>
+      <div class="s" id="sub_spga">Chưa chạy</div>
+      <div class="progress"><div class="progress-bar" id="bar_spga"></div></div>
+    </div>
+    <div class="score">
+      <div class="k">GA-TS · Z tốt nhất</div>
+      <div class="v" id="z_ts">–</div>
+      <div class="d" id="d_ts"></div>
+      <div class="s" id="sub_ts">Chưa chạy</div>
+      <div class="progress"><div class="progress-bar" id="bar_ts"></div></div>
+    </div>
+    <div class="score">
+      <div class="k">GA-SA · Z tốt nhất</div>
+      <div class="v" id="z_sa">–</div>
+      <div class="d" id="d_sa"></div>
+      <div class="s" id="sub_sa">Chưa chạy</div>
+      <div class="progress"><div class="progress-bar" id="bar_sa"></div></div>
+    </div>
+    <div class="score">
+      <div class="k">Matheuristics (GA-LP) · Z tốt nhất</div>
+      <div class="v" id="z_ml">–</div>
+      <div class="d" id="d_ml"></div>
+      <div class="s" id="sub_ml">Chưa chạy</div>
+      <div class="progress"><div class="progress-bar" id="bar_ml"></div></div>
+    </div>
+  </section>
+
+  <div class="main-layout">
+    <div class="col">
+      <div class="card" style="flex:1.2;">
+        <h2 id="convTitle">Hội tụ: Z tốt nhất theo số lần đánh giá</h2>
+        <p class="hint" id="convHint">Đường càng cao càng tốt.</p>
+        <div class="plot-wrapper"><canvas id="cConv"></canvas></div>
+      </div>
+      <div class="card" style="flex:1;">
+        <h2>Phương án tốt nhất: số tester mỗi quý</h2>
+        <div class="plans-grid">
+          <div class="plan-item"><b>SPGA gốc</b><div class="plot-wrapper"><canvas id="cPlan_spga"></canvas></div></div>
+          <div class="plan-item"><b>GA-TS</b><div class="plot-wrapper"><canvas id="cPlan_ts"></canvas></div></div>
+          <div class="plan-item"><b>GA-SA</b><div class="plot-wrapper"><canvas id="cPlan_sa"></canvas></div></div>
+          <div class="plan-item"><b>GA-LP</b><div class="plot-wrapper"><canvas id="cPlan_ml"></canvas></div></div>
+        </div>
+      </div>
+    </div>
+    <div class="col">
+      <div class="card" style="flex:1.2;">
+        <h2>Bảng so sánh</h2>
+        <div class="scroll-table">
+          <table>
+            <thead>
+              <tr><th>Chỉ số</th><th>SPGA</th><th>GA-TS</th><th>GA-SA</th><th>GA-LP</th></tr>
+            </thead>
+            <tbody id="tb"></tbody>
+          </table>
+        </div>
+        <p class="hint" id="statLine" style="margin-top:3px"></p>
+      </div>
+      <div class="card" style="flex:1;">
+        <h2>Nhật ký Tìm kiếm cục bộ (LS)</h2>
+        <ul id="feed"><li class="hint" style="padding:4px">Bấm ▶ Chạy để xem tiến trình.</li></ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- TAB 2: KIỂM ĐỊNH LẶP -->
+<section class="tabpanel" id="tab-bench">
+  <form id="benchForm" class="toolbar" onsubmit="event.preventDefault(); startBenchmark();">
+    <label>Số lần lặp N: <input name="n_runs" id="n_runs" type="number" value="10" min="1" style="width:40px"></label>
+    <label>Đánh giá: <input name="budget" type="number" min="100" value="6000" style="width:60px"></label>
+    <label>k: <input name="k" type="number" value="0.5" step="0.1" min="0" max="1" style="width:40px"></label>
+    <label>σ: <input name="sigma" type="number" value="7000" min="0" style="width:55px"></label>
+    <label>α: <select name="alpha"><option value="0.05">0.05</option><option value="0.01">0.01</option></select></label>
+    <button type="submit" class="primary" id="goBench">▶ Chạy Kiểm định</button>
+    <button type="button" onclick="exportExcel()">📥 Xuất Excel</button>
+  </form>
+
+  <div class="toolbar" style="background:#ffffff; border-top:0;">
+    <label>Giả thuyết:</label>
+    <select id="presetHypo" onchange="applyHypoPreset()">
+      <option value="ts_vs_spga" selected>GA-TS vs SPGA gốc</option>
+      <option value="sa_vs_spga">GA-SA vs SPGA gốc</option>
+      <option value="ts_vs_sa">GA-TS vs GA-SA</option>
+      <option value="ml_vs_spga">Matheuristics (GA-LP) vs SPGA gốc</option>
+    </select>
+    <input id="h0_input" type="text" style="flex:1" placeholder="H₀: Giả thuyết Không">
+    <input id="h1_input" type="text" style="flex:1" placeholder="H₁: Giả thuyết Thay thế">
+  </div>
+
+  <div class="progress" style="flex-shrink:0;"><div class="progress-bar" id="benchBar"></div></div>
+  <p class="hint" id="benchStatus">Chạy nhiều seed để kiểm định thống kê và xếp hạng.</p>
+
+  <div class="grid-2col">
+    <div class="col">
+      <div class="card" style="flex:1.2;">
+        <h2>Hội tụ (realtime) <span id="runTitle"></span></h2>
+        <div class="plot-wrapper"><canvas id="bConvCanvas"></canvas></div>
+      </div>
+      <div class="card" style="flex:1;">
+        <h2>Phân bổ thiết bị theo quý <span id="runSubInfo" class="hint"></span></h2>
+        <div class="plot-wrapper"><canvas id="bPlanCanvas"></canvas></div>
+      </div>
+    </div>
+    <div class="col">
+      <div class="card" style="flex:1;">
+        <h2>Lịch sử các Runs</h2>
+        <div class="runlist" id="runButtons"></div>
+        <div class="scroll-table" style="max-height:120px;">
+          <table id="leaderTable"></table>
+        </div>
+      </div>
+      <div class="card" style="flex:1.3;">
+        <h2>Kết quả Thống kê & Kiểm định</h2>
+        <div id="statTableBox" class="scroll-table"></div>
+        <div style="margin-top:4px; flex-shrink:0;">
+          <button type="button" class="primary" id="milpBtn" onclick="runMilp()">🧮 Tính cận tối ưu MILP</button>
+          <span class="hint" id="milpStatus"></span>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- TAB 3: PHÂN TÍCH ĐỘ NHẠY -->
+<section class="tabpanel" id="tab-sens">
+  <div class="toolbar">
+    <span class="hint" id="sensStatus">Mở tab này lần đầu sẽ tự chạy quét tham số k ∈ [0,1] và σ ∈ [1000,10000].</span>
+    <button type="button" id="sensStop" onclick="stopSens()">■ Dừng quét</button>
+  </div>
+  <div class="progress" style="flex-shrink:0;"><div class="progress-bar" id="sensBar"></div></div>
+
+  <div class="grid-2col">
+    <div class="col">
+      <div class="card" style="flex:1;">
+        <h2>Đường cong phản ứng Z theo k (Rủi ro)</h2>
+        <div class="plot-wrapper"><canvas id="sensKCanvas"></canvas></div>
+      </div>
+      <div class="card" style="flex:1;">
+        <h2>Đường cong phản ứng Z theo σ (Biến động Nhu cầu)</h2>
+        <div class="plot-wrapper"><canvas id="sensSigmaCanvas"></canvas></div>
+      </div>
+    </div>
+    <div class="col">
+      <div class="card" style="flex:1;">
+        <h2>Bảng Đánh giá & Phân tích Độ nhạy</h2>
+        <div id="sensNarrativeBox" style="font-size:11px; line-height:1.35; border:1px solid #ccc; padding:4px; background:#fafafa; margin-bottom:4px; max-height:100px; overflow-y:auto; white-space:pre-wrap;"></div>
+        <div class="scroll-table"><table id="sensImpactTable"></table></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- DIALOGS -->
+<dialog id="lsDialog">
+  <h2 style="font-size:13px; margin-top:0;">Tham số tìm kiếm cục bộ</h2>
+  <div class="dialog-grid">
+    <label for="ls_freq">Chạy mỗi … thế hệ:</label><input id="ls_freq" form="f" name="ls_freq" type="number" min="1">
+    <label for="ls_top">Số cá thể tốt nhất:</label><input id="ls_top" form="f" name="ls_top" type="number" min="1">
+    <label for="ls_max">Tối đa đánh giá / cá thể:</label><input id="ls_max" form="f" name="ls_max" type="number" min="1">
+    <label for="ts_n_cand">GA-TS Candidate steps:</label><input id="ts_n_cand" form="f" name="ts_n_cand" type="number" min="1">
+    <label for="ts_tenure">GA-TS Tabu tenure:</label><input id="ts_tenure" form="f" name="ts_tenure" type="number" min="0">
+    <label for="sa_p0">GA-SA Initial prob (p0):</label><input id="sa_p0" form="f" name="sa_p0" type="number" step="0.1" min="0.01" max="0.99">
+  </div>
+  <div style="text-align:right; margin-top:8px;">
+    <button class="close" type="button">Đóng</button>
+  </div>
+</dialog>
+
+<dialog id="howDialog">
+  <h2 style="font-size:13px; margin-top:0;">Cách hoạt động</h2>
+  <p>Bài toán: chọn danh mục máy kiểm thử và phân bổ sản lượng cho 3 sản phẩm trong 8 quý. Mỗi phương án được chấm trên 30 kịch bản nhu cầu bằng <b>Z = (1−k)·lợi nhuận trung bình − k·MAD</b>.</p>
+  <ul>
+    <li><b>SPGA gốc:</b> GA thuần (quần thể 30, tournament 2, hybrid crossover, uniform mutation).</li>
+    <li><b>GA-TS:</b> GA + Tabu Search (bốc bước lân cận, cấm bước ngược, dùng chung tabu list).</li>
+    <li><b>GA-SA:</b> GA + Simulated Annealing (làm nguội theo cấp số nhân).</li>
+    <li><b>Matheuristics (GA-LP):</b> GA tìm phương án máy, LP (HiGHS) tối ưu phân bổ sản lượng.</li>
+  </ul>
+  <div style="text-align:right; margin-top:8px;">
+    <button class="close" type="button">Đóng</button>
+  </div>
+</dialog>
+
+<script>
+"use strict";
+
+// Trực quan hóa đơn sắc / Grayscale chuẩn phần mềm cũ
+const CHART_STYLES = {
+  spga: { color: "#000000", dash: [] },
+  ts:   { color: "#444444", dash: [4, 3] },
+  sa:   { color: "#777777", dash: [2, 2] },
+  ml:   { color: "#aaaaaa", dash: [6, 2] }
+};
+
+const ALGOS = ["spga", "ts", "sa", "ml"];
+const NAME = { spga: "SPGA gốc", ts: "GA-TS", sa: "GA-SA", ml: "GA-LP" };
+const LABEL = { spga: "SPGA gốc", ts: "GA-TS", sa: "GA-SA", ml: "Matheuristics (GA-LP)" };
+const CODE = { "SPGA gốc": "spga", "GA-TS": "ts", "GA-SA": "sa", "Matheuristics (GA-LP)": "ml" };
+const PARAMS = ["mode", "seed", "budget", "k", "sigma", "ls_freq", "ls_top", "ls_max", "ts_n_cand", "ts_tenure", "sa_p0"];
+
+const $ = s => document.querySelector(s);
+const fmt = (v, d = 2) => (v == null || !isFinite(v)) ? "–" : v.toLocaleString("vi-VN", { minimumFractionDigits: d, maximumFractionDigits: d });
+const signed = (v, d = 2) => (v == null || !isFinite(v)) ? "–" : (v >= 0 ? "+" : "") + fmt(v, d);
+const pv = (p, d = 3) => (p == null || !isFinite(p)) ? "–" : (p < Math.pow(10, -d) ? "<" + fmt(Math.pow(10, -d), d) : fmt(p, d));
+
+// Quản lý Instance Chart.js hủy biểu đồ cũ tránh leak bộ nhớ
+const chartInstances = {};
+function renderChart(canvasId, type, config) {
+  if (chartInstances[canvasId]) {
+    chartInstances[canvasId].destroy();
+  }
+  const canvas = document.getElementById(canvasId);
+  if (!canvas) return null;
+  const ctx = canvas.getContext("2d");
+  chartInstances[canvasId] = new Chart(ctx, { type, ...config });
+  return chartInstances[canvasId];
+}
+
+// Global State
+let S = null, es = null, defaults = {}, budget = 6000, RES = null;
+const freshAlgo = () => ({ hist: [], plan: null, lsMarks: [], done: null, best: null, evals: 0, gen: 0, steps: 0, worse: 0, aspiration: 0, blocked: 0 });
+
+// Render Chart 1: Hội tụ (Tab 1)
+function drawConv() {
+  const datasets = [];
+  if (S) {
+    S.algos.forEach(a => {
+      const st = CHART_STYLES[a] || CHART_STYLES.spga;
+      datasets.push({
+        label: NAME[a],
+        data: S.a[a].hist.map(p => ({ x: p[0], y: p[1] })),
+        borderColor: st.color,
+        borderDash: st.dash,
+        borderWidth: 1.5,
+        pointRadius: 0,
+        showLine: true
+      });
+    });
+  } else if (RES?.curves) {
+    ALGOS.forEach(a => {
+      if (RES.curves[LABEL[a]]) {
+        const st = CHART_STYLES[a] || CHART_STYLES.spga;
+        datasets.push({
+          label: NAME[a],
+          data: RES.curves[LABEL[a]].map((v, i) => ({ x: RES.curves.grid[i], y: v })),
+          borderColor: st.color,
+          borderDash: st.dash,
+          borderWidth: 1.5,
+          pointRadius: 0,
+          showLine: true
+        });
+      }
+    });
+  }
+
+  renderChart("cConv", "line", {
+    data: { datasets },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      animation: false,
+      scales: {
+        x: { type: 'linear', title: { display: true, text: 'Số lần đánh giá', font: { size: 10 } }, ticks: { font: { size: 9 } } },
+        y: { title: { display: true, text: 'Z tốt nhất (triệu)', font: { size: 10 } }, ticks: { font: { size: 9 } } }
+      },
+      plugins: { legend: { labels: { font: { size: 10 }, boxWidth: 12 } } }
+    }
+  });
+}
+
+// Render Chart Plans (Tab 1)
+function drawPlan(a) {
+  const P = S?.a[a]?.plan;
+  const canvasId = "cPlan_" + a;
+  if (!P || (S && !S.algos.includes(a))) {
+    renderChart(canvasId, "bar", { data: { labels: [], datasets: [] }, options: { responsive: true, maintainAspectRatio: false } });
+    return;
+  }
+
+  const labels = P.owned.map((_, i) => "Q" + (i + 1));
+  renderChart(canvasId, "bar", {
+    data: {
+      labels: labels,
+      datasets: [
+        { label: 'Mua', data: P.owned, backgroundColor: '#333333' },
+        { label: 'Thuê', data: P.rented, backgroundColor: '#999999' }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      animation: false,
+      scales: {
+        x: { stacked: true, ticks: { font: { size: 8 } } },
+        y: { stacked: true, beginAtZero: true, ticks: { font: { size: 8 } } }
+      },
+      plugins: { legend: { display: false } }
+    }
+  });
+}
+
+function redraw() {
+  drawConv();
+  ALGOS.forEach(drawPlan);
+}
+
+// Update Metrics & Table
+function bestAtEvals(st, n) {
+  let v = null;
+  for (const [e, f] of st.hist) { if (e <= n) v = f; else break; }
+  return v;
+}
+
+function updateScores() {
+  for (const a of ALGOS) {
+    const st = S.a[a], on = S.algos.includes(a);
+    $("#z_" + a).textContent = on && st.best != null ? fmt(st.best) + " tr" : "–";
+    $("#sub_" + a).textContent = !on ? "Không chạy" : st.done ? `Xong · ${st.gen} TH` : `TH ${st.gen} · ${st.evals}/${budget}`;
+    $("#bar_" + a).style.width = on ? Math.min(100, 100 * st.evals / budget) + "%" : "0";
+  }
+  for (const a of ["ts", "sa", "ml"]) {
+    const el = $("#d_" + a); el.textContent = "";
+    if (!S.algos.includes(a) || !S.algos.includes("spga")) continue;
+    const n = Math.min(S.a.spga.evals, S.a[a].evals), fa = bestAtEvals(S.a.spga, n), fb = bestAtEvals(S.a[a], n);
+    if (fa == null || fb == null) continue;
+    const d = fb - fa;
+    el.textContent = `${signed(d)} tr (${signed(100 * d / Math.abs(fa))}%)`;
+  }
+}
+
+function row(label, vals, d, dir) {
+  const nums = vals.filter(v => v != null && isFinite(v));
+  const best = dir && nums.length > 1 ? (dir > 0 ? Math.max(...nums) : Math.min(...nums)) : null;
+  const cells = vals.map(v => `<td class="${best != null && v != null && v.toFixed(d) === best.toFixed(d) ? "win" : ""}">${fmt(v, d)}</td>`).join("");
+  return `<tr><td>${label}</td>${cells}</tr>`;
+}
+
+function renderTable() {
+  const on = a => S && S.algos.includes(a);
+  const pick = f => ALGOS.map(a => on(a) ? f(S.a[a]) : null);
+  const sum = xs => xs ? xs.reduce((x, y) => x + y, 0) : null;
+  let html = '<tr><th colspan="5" style="text-align:left; background:#dddddd;">Lần chạy hiện tại</th></tr>';
+  html += row("Z tốt nhất (triệu)", pick(s => s.best), 2, 1);
+  html += row("Lợi nhuận TB (triệu)", pick(s => s.plan?.mean), 2, 1);
+  html += row("Rủi ro MAD (triệu)", pick(s => s.plan?.mad), 2, -1);
+  html += row("Tester mua (máy)", pick(s => sum(s.plan?.K_m)), 0, 0);
+  html += row("Tester thuê (máy·quý)", pick(s => sum(s.plan?.rented)), 0, 0);
+  html += row("Bước tệ đã đi", ALGOS.map(a => on(a) && (a === "ts" || a === "sa") ? S.a[a].worse : null), 0, 0);
+  
+  const savedAlgs = RES?.summary ? ALGOS.filter(a => RES.summary[LABEL[a]]) : [];
+  if (RES?.available && savedAlgs.length) {
+    const m = a => RES.summary[LABEL[a]], n = m(savedAlgs[0]).n;
+    html += `<tr><th colspan="5" style="text-align:left; background:#dddddd;">Thực nghiệm tích lũy (${n} seed)</th></tr>`;
+    html += row("Z trung bình (triệu)", ALGOS.map(a => savedAlgs.includes(a) ? m(a).fitness_mean : null), 2, 1);
+    html += row("Độ lệch chuẩn (triệu)", ALGOS.map(a => savedAlgs.includes(a) ? m(a).fitness_std : null), 2, -1);
+    html += row("Z kịch bản kiểm tra", ALGOS.map(a => savedAlgs.includes(a) ? m(a).test_mean : null), 2, 1);
+  }
+  $("#tb").innerHTML = html;
+}
+
+function renderStatLine() {
+  const t = RES?.stats; if (!t) { $("#statLine").textContent = ""; return; }
+  const fr = t.match(/Friedman.*?p=([\d.]+)/);
+  const holm = (a, b) => t.match(new RegExp(`Wilcoxon ${a} vs ${b}:.*?p_Holm=([\\d.]+)`));
+  const parts = [];
+  if (fr) parts.push(`Friedman p = ${pv(+fr[1])}`);
+  const ts = holm("GA-TS", "SPGA gốc"), sa = holm("GA-SA", "SPGA gốc"), tsa = holm("GA-TS", "GA-SA");
+  if (ts) parts.push(`TS vs gốc p = ${pv(+ts[1])}`);
+  if (sa) parts.push(`SA vs gốc p = ${pv(+sa[1])}`);
+  if (tsa) parts.push(`TS vs SA p = ${pv(+tsa[1])}`);
+  $("#statLine").textContent = parts.length ? "Kiểm định Wilcoxon-Holm: " + parts.join(" · ") : "";
+}
+
+function addFeed(d) {
+  const box = $("#feed"); if (box.querySelector(".hint")) box.innerHTML = "";
+  const lines = [];
+  for (const e of d.ls) {
+    for (const s of e.steps) lines.push(`<li>[${NAME[d.algo]}] TH ${d.gen} - Hạng ${e.rank}: ${s.msg}</li>`);
+  }
+  box.insertAdjacentHTML("afterbegin", lines.reverse().join(""));
+  while (box.children.length > 40) box.lastChild.remove();
+}
+
+// Execution Controls Tab 1
+const form = $("#f");
+function running(on) {
+  $("#go").textContent = on ? "■ Dừng" : "▶ Chạy";
+  $("#go").classList.toggle("running", on);
+  [...form.elements].filter(x => x.name).forEach(x => x.disabled = on);
+}
+
+function stop() { if (es) { es.close(); es = null; } running(false); }
+
+function start() {
+  const q = new URLSearchParams(defaults);
+  for (const k of PARAMS) if (form.elements[k].value !== "") q.set(k, form.elements[k].value);
+  budget = +q.get("budget");
+  $("#feed").innerHTML = '<li class="hint" style="padding:4px">Đang khởi chạy thuật toán...</li>';
+  S = { algos: [], a: { spga: freshAlgo(), ts: freshAlgo(), sa: freshAlgo(), ml: freshAlgo() }, k: +q.get("k"), sigma: +q.get("sigma"), milp: null };
+  running(true); renderTable(); renderStatLine(); redraw();
+  
+  es = new EventSource("/api/run?" + q.toString());
+  es.addEventListener("start", e => { S.algos = JSON.parse(e.data).algos; updateScores(); renderTable(); redraw(); });
+  es.addEventListener("gen", e => {
+    const d = JSON.parse(e.data), st = S.a[d.algo];
+    st.gen = d.gen; st.evals = d.evals; st.best = d.best;
+    const last = st.hist[st.hist.length - 1];
+    if (!last || last[1] !== d.best || d.evals - last[0] > budget / 100) st.hist.push([d.evals, d.best]);
+    if (d.plan) st.plan = d.plan;
+    if (d.ls.length) {
+      st.lsMarks.push([d.evals, d.best]);
+      for (const l of d.ls) { st.steps += l.n_steps; st.worse += l.n_worse; st.aspiration += l.n_aspiration; st.blocked += l.n_blocked; }
+      addFeed(d);
+    }
+    updateScores(); renderTable(); redraw();
+  });
+  es.addEventListener("done", e => {
+    const d = JSON.parse(e.data);
+    for (const a of Object.keys(d)) { S.a[a].done = d[a]; S.a[a].hist.push([d[a].evals, d[a].best]); }
+    stop(); updateScores(); renderTable(); redraw();
+  });
+  es.onerror = () => { stop(); $("#statLine").innerHTML = '<span class="err">Lỗi kết nối máy chủ.</span>'; };
+}
+
+form.onsubmit = ev => { ev.preventDefault(); es ? stop() : start(); };
+$("#openLs").onclick = () => $("#lsDialog").showModal();
+$("#openHow").onclick = () => $("#howDialog").showModal();
+document.querySelectorAll("dialog .close").forEach(b => b.onclick = () => b.closest("dialog").close());
+
+// Tab Navigation
+function switchTab(tabId) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.tabpanel').forEach(p => p.classList.remove('active'));
+  document.getElementById('t-' + tabId).classList.add('active');
+  document.getElementById('tab-' + tabId).classList.add('active');
+  if (tabId === "single") redraw();
+  if (tabId === "bench") redrawBench();
+  if (tabId === "sens") { drawSensLines(); if (!sensAutoStarted) { sensAutoStarted = true; startSensAuto(); } }
+}
+
+function applyHypoPreset() {
+  const val = document.getElementById("presetHypo").value;
+  const h0 = document.getElementById("h0_input");
+  const h1 = document.getElementById("h1_input");
+  if (val === "ts_vs_spga") {
+    h0.value = "GA-TS không khác biệt so với SPGA gốc";
+    h1.value = "GA-TS vượt trội hơn SPGA gốc có ý nghĩa thống kê";
+  } else if (val === "sa_vs_spga") {
+    h0.value = "GA-SA không khác biệt so với SPGA gốc";
+    h1.value = "GA-SA vượt trội hơn SPGA gốc có ý nghĩa thống kê";
+  } else if (val === "ts_vs_sa") {
+    h0.value = "GA-TS không khác biệt so với GA-SA";
+    h1.value = "GA-TS vượt trội hơn GA-SA có ý nghĩa thống kê";
+  } else if (val === "ml_vs_spga") {
+    h0.value = "Matheuristics (GA-LP) không khác biệt so với SPGA gốc";
+    h1.value = "Matheuristics (GA-LP) vượt trội hơn SPGA gốc có ý nghĩa thống kê";
+  }
+}
+
+// TAB 2: KIỂM ĐỊNH LẶP
+let esBench = null;
+let bench = { algos: [], n_runs: 10, budget: 6000, current: {}, currentSeed: 0, runs: {}, runOrder: [], selectedSeed: null, leaderboard: [], summary: null, conclusion: "", milp: null, params: { k: 0.5, sigma: 7000 } };
+const benchForm = $("#benchForm");
+
+function benchRunning(on) {
+  $("#goBench").textContent = on ? "■ Dừng" : "▶ Chạy Kiểm định";
+  $("#goBench").classList.toggle("running", on);
+  $("#milpBtn").disabled = on;
+  [...benchForm.elements].filter(x => x.name).forEach(x => x.disabled = on);
+}
+function stopBench() { if (esBench) { esBench.close(); esBench = null; } benchRunning(false); }
+
+function drawBenchConv() {
+  const v = benchView();
+  const datasets = [];
+  if (v.detail) {
+    bench.algos.forEach(a => {
+      const d = v.detail.algorithms[a];
+      if (d?.history) {
+        const st = CHART_STYLES[CODE[a] || "spga"];
+        datasets.push({
+          label: a,
+          data: d.history.map(p => ({ x: p[0], y: p[1] / 1e6 })),
+          borderColor: st.color,
+          borderDash: st.dash,
+          borderWidth: 1.5,
+          showLine: true
+        });
+      }
+    });
+  } else if (v.seed) {
+    bench.algos.forEach(a => {
+      const st = bench.current[a];
+      if (st?.hist?.length) {
+        const style = CHART_STYLES[CODE[a] || "spga"];
+        datasets.push({
+          label: a,
+          data: st.hist.map(p => ({ x: p[0], y: p[1] })),
+          borderColor: style.color,
+          borderDash: style.dash,
+          borderWidth: 1.5,
+          showLine: true
+        });
+      }
+    });
+  }
+
+  renderChart("bConvCanvas", "line", {
+    data: { datasets },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      animation: false,
+      scales: {
+        x: { type: 'linear', ticks: { font: { size: 9 } } },
+        y: { title: { display: true, text: 'Z (triệu)', font: { size: 10 } }, ticks: { font: { size: 9 } } }
+      },
+      plugins: { legend: { labels: { font: { size: 9 }, boxWidth: 10 } } }
+    }
+  });
+}
+
+function drawBenchPlan() {
+  const v = benchView();
+  let P = null;
+  if (v.detail) {
+    const best = bestAlgoOf(v.detail);
+    P = v.detail.algorithms[best]?.plan || null;
+  } else if (v.seed) {
+    let best = null, bz = -Infinity;
+    for (const a of bench.algos) {
+      const st = bench.current[a];
+      const z = st?.hist?.length ? st.hist[st.hist.length - 1][1] : -Infinity;
+      if (z > bz) { bz = z; best = a; }
+    }
+    if (best) P = bench.current[best]?.plan || null;
+  }
+
+  if (!P) {
+    renderChart("bPlanCanvas", "bar", { data: { labels: [], datasets: [] }, options: { responsive: true, maintainAspectRatio: false } });
+    return;
+  }
+
+  renderChart("bPlanCanvas", "bar", {
+    data: {
+      labels: P.owned.map((_, i) => "Q" + (i + 1)),
+      datasets: [
+        { label: 'Mua', data: P.owned, backgroundColor: '#333333' },
+        { label: 'Thuê', data: P.rented, backgroundColor: '#999999' }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      animation: false,
+      scales: {
+        x: { stacked: true, ticks: { font: { size: 9 } } },
+        y: { stacked: true, ticks: { font: { size: 9 } } }
+      },
+      plugins: { legend: { display: false } }
+    }
+  });
+}
+
+function benchView() {
+  if (bench.selectedSeed && bench.runs[bench.selectedSeed]) return { seed: bench.selectedSeed, detail: bench.runs[bench.selectedSeed] };
+  return { seed: bench.currentSeed, detail: null };
+}
+
+function bestAlgoOf(detail) {
+  if (!bench.algos.length || !detail) return null;
+  return bench.algos.reduce((b, a) => detail.algorithms[a].fitness > detail.algorithms[b].fitness ? a : b, bench.algos[0]);
+}
+
+function redrawBench() { drawBenchConv(); drawBenchPlan(); updateBenchTitles(); }
+
+function updateBenchTitles() {
+  const v = benchView();
+  $("#runTitle").textContent = v.seed ? `(Run ${v.seed}/${bench.n_runs})` : "";
+  const info = $("#runSubInfo");
+  if (v.detail) {
+    const best = bestAlgoOf(v.detail);
+    if (!best) { info.textContent = ""; return; }
+    const d = v.detail.algorithms[best];
+    info.textContent = `Thuật toán tốt nhất: ${best} | Z = ${fmt(d.fitness / 1e6)} tr`;
+  } else info.textContent = "";
+}
+
+function renderRunButtons() {
+  const box = $("#runButtons"); box.innerHTML = "";
+  bench.runOrder.forEach(seed => {
+    const b = document.createElement("button");
+    b.textContent = `Run ${seed}`;
+    if (bench.selectedSeed === seed) b.classList.add("active");
+    b.onclick = () => { bench.selectedSeed = seed; renderRunButtons(); redrawBench(); };
+    box.appendChild(b);
+  });
+}
+
+function renderLeaderboard(lb) {
+  if (!lb || !lb.length) { $("#leaderTable").innerHTML = ""; return; }
+  let html = `<thead><tr><th>Hạng</th><th>Seed</th><th>Thuật toán</th><th>Z (triệu)</th></tr></thead><tbody>`;
+  lb.forEach((e, i) => { html += `<tr><td style="text-align:center">${i + 1}</td><td style="text-align:center">${e.seed}</td><td>${e.algorithm}</td><td>${fmt(e.z / 1e6)}</td></tr>`; });
+  html += "</tbody>";
+  $("#leaderTable").innerHTML = html;
+}
+
+function renderBenchStats() {
+  const s = bench.summary;
+  if (!s) { $("#statTableBox").innerHTML = ""; return; }
+  const algs = Object.keys(s.per_alg);
+  const v = a => s.per_alg[a];
+  let html = `<table><thead><tr><th>Chỉ số</th>${algs.map(a => `<th>${a}</th>`).join("")}</tr></thead><tbody>`;
+  html += row("Z trung bình (triệu)", algs.map(a => v(a).mean / 1e6), 2, 1);
+  html += row("Độ lệch chuẩn (triệu)", algs.map(a => v(a).std / 1e6), 2, -1);
+  html += row("Trung vị (triệu)", algs.map(a => v(a).median / 1e6), 2, 1);
+  html += row("Win-rate (%)", algs.map(a => v(a).win_rate * 100), 1, 1);
+  html += "</tbody></table>";
+  let extra = "";
+  if (s.friedman) extra += `<p class="hint">Friedman Test: p = ${pv(s.friedman.p, 4)}</p>`;
+  if (bench.conclusion) extra += `<p class="hint" style="font-weight:bold">${bench.conclusion}</p>`;
+  $("#statTableBox").innerHTML = html + extra;
+}
+
+function startBenchmark() {
+  if (esBench) { stopBench(); return; }
+  const q = new URLSearchParams();
+  for (const k of ["n_runs", "budget", "k", "sigma", "alpha"]) {
+    if (benchForm.elements[k] && benchForm.elements[k].value !== "") q.set(k, benchForm.elements[k].value);
+  }
+  q.set("h0", $("#h0_input").value || "");
+  q.set("h1", $("#h1_input").value || "");
+  bench = { algos: [], n_runs: +benchForm.elements["n_runs"].value || 10, budget: +benchForm.elements["budget"].value || 6000, current: {}, currentSeed: 0, runs: {}, runOrder: [], selectedSeed: null, leaderboard: [], summary: null, conclusion: "", milp: null, params: { k: +benchForm.elements["k"].value || 0.5, sigma: +benchForm.elements["sigma"].value || 7000 } };
+  
+  $("#benchStatus").textContent = "Đang kiểm định..."; $("#benchBar").style.width = "0%";
+  benchRunning(true);
+  esBench = new EventSource("/api/run-benchmark?" + q.toString());
+  esBench.addEventListener("start", e => {
+    const d = JSON.parse(e.data);
+    bench.algos = d.algorithms; bench.n_runs = d.n_runs; bench.budget = d.budget;
+  });
+  esBench.addEventListener("run_start", e => {
+    const d = JSON.parse(e.data);
+    bench.current = {}; bench.currentSeed = d.seed; bench.selectedSeed = null;
+    for (const a of bench.algos) bench.current[a] = { hist: [], plan: null };
+    renderRunButtons(); redrawBench();
+  });
+  esBench.addEventListener("gen", e => {
+    const d = JSON.parse(e.data);
+    const st = bench.current[d.algo]; if (!st) return;
+    st.hist.push([d.evals, d.best]);
+    if (d.plan) st.plan = d.plan;
+    $("#benchBar").style.width = Math.min(100, 100 * d.evals / bench.budget) + "%";
+    redrawBench();
+  });
+  esBench.addEventListener("run_done", e => {
+    const d = JSON.parse(e.data);
+    bench.runs[d.seed] = d;
+    if (!bench.runOrder.includes(d.seed)) bench.runOrder.push(d.seed);
+    bench.selectedSeed = d.seed;
+    renderRunButtons(); redrawBench();
+  });
+  esBench.addEventListener("done", e => {
+    const d = JSON.parse(e.data);
+    bench.summary = d.summary; bench.leaderboard = d.leaderboard; bench.conclusion = d.conclusion;
+    $("#benchBar").style.width = "100%";
+    renderLeaderboard(d.leaderboard); renderRunButtons(); renderBenchStats();
+    $("#benchStatus").textContent = "Hoàn tất kiểm định.";
+    stopBench();
+  });
+  esBench.onerror = () => { stopBench(); $("#benchStatus").innerHTML = '<span class="err">Lỗi thực thi kiểm định.</span>'; };
+}
+
+async function exportExcel() {
+  try {
+    const r = await fetch("/api/export-excel");
+    const blob = await r.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a"); a.href = url; a.download = "Bao_Cao_Kiem_Dinh.xlsx"; a.click();
+  } catch (e) { alert("Không thể xuất file."); }
+}
+
+async function runMilp() {
+  $("#milpStatus").textContent = "Đang tính MILP...";
+  try {
+    const r = await fetch(`/api/milp?k=${bench.params.k}&sigma=${bench.params.sigma}&n_scen=30&scen_seed=2026&time_limit=120`);
+    const j = await r.json();
+    $("#milpStatus").textContent = j.error ? j.error : `Z_opt = ${fmt(j.z_opt / 1e6)} tr`;
+  } catch (e) { $("#milpStatus").textContent = "Lỗi kết nối MILP."; }
+}
+
+// TAB 3: PHÂN TÍCH ĐỘ NHẠY
+let esSens = null, sensAutoStarted = false;
+let sens = { algos: [], k_grid: [], sigma_grid: [], metrics: {}, impact: [], narrative: "" };
+
+function stopSens() { if (esSens) { esSens.close(); esSens = null; } }
+
+function drawSensLines() {
+  const datasetsK = sens.algos.map(a => {
+    const st = CHART_STYLES[a] || CHART_STYLES.spga;
+    return {
+      label: NAME[a],
+      data: (sens.metrics[a]?.mean_by_k || []).map((y, i) => ({ x: sens.k_grid[i], y: y / 1e6 })),
+      borderColor: st.color,
+      borderDash: st.dash,
+      showLine: true
+    };
+  });
+  renderChart("sensKCanvas", "line", {
+    data: { datasets: datasetsK },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      animation: false,
+      scales: {
+        x: { type: 'linear', title: { display: true, text: 'Hệ số rủi ro (k)', font: { size: 10 } }, ticks: { font: { size: 9 } } },
+        y: { title: { display: true, text: 'Z TB (triệu)', font: { size: 10 } }, ticks: { font: { size: 9 } } }
+      },
+      plugins: { legend: { labels: { font: { size: 9 }, boxWidth: 10 } } }
+    }
+  });
+
+  const datasetsS = sens.algos.map(a => {
+    const st = CHART_STYLES[a] || CHART_STYLES.spga;
+    return {
+      label: NAME[a],
+      data: (sens.metrics[a]?.mean_by_sigma || []).map((y, i) => ({ x: sens.sigma_grid[i], y: y / 1e6 })),
+      borderColor: st.color,
+      borderDash: st.dash,
+      showLine: true
+    };
+  });
+  renderChart("sensSigmaCanvas", "line", {
+    data: { datasets: datasetsS },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      animation: false,
+      scales: {
+        x: { type: 'linear', title: { display: true, text: 'Độ lệch nhu cầu (σ)', font: { size: 10 } }, ticks: { font: { size: 9 } } },
+        y: { title: { display: true, text: 'Z TB (triệu)', font: { size: 10 } }, ticks: { font: { size: 9 } } }
+      },
+      plugins: { legend: { labels: { font: { size: 9 }, boxWidth: 10 } } }
+    }
+  });
+}
+
+function renderSensImpact() {
+  if (!sens.impact.length) { $("#sensImpactTable").innerHTML = ""; return; }
+  let html = `<thead><tr><th>Tham số</th><th>Giá trị</th><th>Thuật toán</th><th>Z TB (tr)</th><th>Δ%</th></tr></thead><tbody>`;
+  sens.impact.forEach(r => {
+    html += `<tr><td style="text-align:center">${r.param}</td><td style="text-align:center">${fmt(r.value, r.param === "k" ? 2 : 0)}</td><td>${r.algorithm}</td>` +
+      `<td>${fmt(r.z_mean / 1e6)}</td><td>${signed(r.delta_pct, 1)}%</td></tr>`;
+  });
+  html += "</tbody>";
+  $("#sensImpactTable").innerHTML = html;
+}
+
+function startSensAuto() {
+  if (esSens) { esSens.close(); esSens = null; }
+  $("#sensStatus").textContent = "Đang quét tham số...";
+  esSens = new EventSource("/api/sensitivity?sens_k_min=0&sens_k_max=1&sens_k_steps=5&sens_sigma_min=1000&sens_sigma_max=10000&sens_sigma_steps=5&sens_budget=1500");
+  esSens.addEventListener("start", e => {
+    const d = JSON.parse(e.data);
+    sens.algos = d.algorithms; sens.k_grid = d.k_grid; sens.sigma_grid = d.sigma_grid;
+  });
+  esSens.addEventListener("cell", e => {
+    const d = JSON.parse(e.data);
+    $("#sensBar").style.width = Math.round(100 * d.done / d.total) + "%";
+  });
+  esSens.addEventListener("done", e => {
+    const d = JSON.parse(e.data);
+    sens.metrics = d.metrics; sens.impact = d.impact; sens.narrative = d.narrative;
+    $("#sensBar").style.width = "100%";
+    $("#sensNarrativeBox").textContent = d.narrative;
+    renderSensImpact(); drawSensLines();
+    $("#sensStatus").textContent = "Quét hoàn tất.";
+    stopSens();
+  });
+  esSens.onerror = () => { stopSens(); $("#sensStatus").innerHTML = '<span class="err">Lỗi quét độ nhạy.</span>'; };
+}
+
+// Initial Load
+(async () => {
+  try { defaults = await (await fetch("/api/defaults")).json(); } catch (e) { }
+  for (const k of PARAMS) if (form.elements[k] && defaults[k] !== undefined) form.elements[k].value = defaults[k];
+  budget = defaults.budget || 6000;
+  applyHypoPreset();
+  try { RES = await (await fetch("/api/results")).json(); } catch (e) { RES = null; }
+  renderStatLine(); renderTable(); redraw();
+})();
+</script>
+</body>
+</html>

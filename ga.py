@@ -462,7 +462,8 @@ def run_ga_iter(evaluate, ls_method="none", seed=0, budget=BUDGET,
                 ls_freq=LS_FREQ, ls_top=LS_TOP, ls_max_evals=LS_MAX_EVALS,
                 pop_size=POP_SIZE, pc=PC, pm=PM, tour=TOURNAMENT, elite=ELITE,
                 ls_shift=LS_SHIFT, lamarck=True,
-                ts_n_cand=TS_N_CAND, ts_tenure=TS_TENURE, ts_shared=True, sa_p0=SA_P0):
+                ts_n_cand=TS_N_CAND, ts_tenure=TS_TENURE, ts_shared=True, sa_p0=SA_P0,
+                repair_fn=None, n_genes=None):
     """Vòng lặp GA dạng generator: trả về trạng thái sau MỖI thế hệ để demo vẽ trực tiếp.
 
     ls_method: "none" = SPGA gốc, "tabu" = GA-TS, "sa" = GA-SA, "hc" = hill climbing (ablation).
@@ -471,19 +472,22 @@ def run_ga_iter(evaluate, ls_method="none", seed=0, budget=BUDGET,
     hơn đã đi/được nhận), n_aspiration, n_blocked, gain (mức Z tăng thêm).
     ts_shared=False: mỗi cá thể một danh sách tabu riêng (chỉ để làm ablation).
     lamarck=False: Baldwinian - chỉ cập nhật điểm, không ghi nghiệm (ablation).
+    repair_fn/n_genes: cho GA-LP (matheuristics.py) - chromosome 63 gen và repair chỉ clip.
 
     Mã giả: xem đầu file."""
     if ls_method not in LS_METHODS:
         raise ValueError(f"ls_method phải thuộc {LS_METHODS}")
     rng = np.random.default_rng(seed)            # cùng seed -> cùng kết quả (tái lập được)
     f_eval = _Counter(evaluate, budget)          # mọi lần tính Z đều qua bộ đếm này
+    repair = mdl.repair if repair_fn is None else repair_fn
+    ng = mdl.N_GENES if n_genes is None else int(n_genes)
     # nếu đổi % chuyển sản lượng thì tạo lại danh sách bước với tỉ lệ mới
     moves = MOVES if ls_shift == LS_SHIFT else [
         (k, i, ls_shift) if k == "shift" else (k, i, st) for (k, i, st) in MOVES]
     t0 = time.perf_counter()
 
     # ---- (1) Khởi tạo: 30 vector gen ngẫu nhiên, repair cho khả thi, chấm điểm
-    pop = np.array([mdl.repair(rng.random(mdl.N_GENES)) for _ in range(pop_size)])
+    pop = np.array([repair(rng.random(ng)) for _ in range(pop_size)])
     fit = np.array([f_eval(x) for x in pop])
     # ---- (1b) Chỉ GA-SA: ước lượng T0 từ quần thể ban đầu (tốn 30 lần evaluate)
     sa_t0 = estimate_t0(pop, fit, f_eval, rng, moves, sa_p0) if ls_method == "sa" else None
@@ -509,7 +513,7 @@ def run_ga_iter(evaluate, ls_method="none", seed=0, budget=BUDGET,
             for c in (c1, c2):
                 if len(new_pop) >= pop_size or f_eval.left() <= 0:
                     break
-                c = mdl.repair(mutate(c, rng, pm))               # đột biến + sửa khả thi
+                c = repair(mutate(c, rng, pm))                   # đột biến + sửa khả thi
                 new_pop.append(c)
                 new_fit.append(f_eval(c))                        # chấm điểm (tốn 1 lần evaluate)
         pop, fit = np.array(new_pop), np.array(new_fit)

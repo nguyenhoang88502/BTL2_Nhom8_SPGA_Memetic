@@ -3,3 +3,4 @@ scipy
 pandas
 matplotlib
 openpyxl
+pulp==2.9.0
