@@ -1,0 +1,101 @@
+\documentclass[11pt]{article}
+\usepackage[paperwidth=21cm,paperheight=9.75cm,margin=0.25cm]{geometry}
+\input{common}
+\pagestyle{empty}
+\setlength{\parindent}{0pt}
+\begin{document}
+%==================================================== TRANG 1: tập, tham số, biến, mục tiêu
+\begin{minipage}[t]{0.47\linewidth}
+\hd{Tập chỉ số}\\[2pt]
+\small
+$p\in\Pset=\{1,\dots,8\}$ quý \quad $m\in\Mset=\{1,2,3\}$ tester\\
+$a\in\Aset=\{1,\dots,4\}$ handler \quad $s\in\Sset=\{1,\dots,N\}$ kịch bản\\
+$t\in\Tset=\{1,2,3\}$ sản phẩm; \ $\Tset^{\text{MTS}}=\{1\}$, $\Tset^{\text{MTO}}=\{2,3\}$\\[5pt]
+\hd{Tham số}\\[2pt]
+\begin{tabular}{@{}l@{\ \ }l@{}}
+$o_{spt}=\max\{0,\ \mathcal N(\mu_t,\sigma^2)\}$ & nhu cầu kịch bản $s$\\
+$b_t$ & lợi nhuận đơn vị\\
+$j,\ l$ & phí tồn kho / thiếu hàng (MTS)\\
+$c_{mt}\in\{0,1\}$ & tester $m$ làm được SP $t$\\
+$\kappa_{mt}=r_{mt}\,H\,u$ & công suất 1 tester/quý\\
+$\kappa^{H}_{a}=r^{H}_{a}\,H\,u$ & công suất 1 handler/quý\\
+$\eta(m,t)\in\Aset$ & handler đi kèm cặp $(m,t)$\\
+$E_m,\ D_m,\ U_m$ & giá mua, thanh lý, thuê tester\\
+$E^H_a,\ D^H_a,\ U^H_a$ & tương tự cho handler\\
+$K^0_m,\ L^0_a$ & số máy ban đầu\\
+$F_0,\ i$ & vốn ban đầu, lãi suất/quý\\
+$k\in[0,1]$ & hệ số ngại rủi ro
+\end{tabular}
+\end{minipage}\hfill
+\begin{minipage}[t]{0.5\linewidth}
+\hd{Biến quyết định (giai đoạn 1, chung cho mọi kịch bản)}\\[2pt]
+\small
+\begin{tabular}{@{}l@{\ \ }l@{}}
+$K_m\in\mathbb Z,\ K^0_m\le K_m\le K^0_m+6$ & tester sở hữu\\
+$L_a\in\mathbb Z,\ L^0_a\le L_a\le L^0_a+8$ & handler sở hữu\\
+$X_{pm}\in\{0,\dots,6\}$ & tester thuê ở quý $p$\\
+$Y_{pa}\in\{0,\dots,8\}$ & handler thuê ở quý $p$\\
+$0\le Q_{pmt}\le 1.5\,\mu_t\,c_{mt}$ & sản lượng giao cho tester
+\end{tabular}\\[4pt]
+{\color{gr}Biến phụ theo kịch bản: $I_{sp}$ tồn kho, $y_{spt}$ lượng bán MTO, $V_{sp}$ phí kho, $F_{sp}$ vốn, $h_s$ lợi nhuận.}\\[8pt]
+\hd{Hàm mục tiêu: lợi nhuận kỳ vọng – rủi ro (MAD)}
+\normalsize
+\[
+\max\ Z \;=\; (1-k)\,\bar h \;-\; k\,\frac1N\sum_{s\in\Sset}\bigl|h_s-\bar h\bigr|,
+\qquad \bar h=\frac1N\sum_{s\in\Sset}h_s
+\]
+\small
+{\color{gr}Thực nghiệm: $k=0.5$, $N=30$ kịch bản cố định (seed 2026), $\sigma=7000$;
+kiểm tra ngoài mẫu trên 1000 kịch bản mới.}
+\end{minipage}
+
+\newpage
+%==================================================== TRANG 2: ràng buộc
+
+\small
+\begin{align}
+&\textstyle\sum_{t\in\Tset} c_{mt}\,Q_{pmt}/\kappa_{mt}\ \le\ K_m+X_{pm} && \forall p,m && \text{đủ tester} \tag{2}\\
+&\textstyle\sum_{(m,t):\,\eta(m,t)=a} Q_{pmt}/\kappa^{H}_{a}\ \le\ L_a+Y_{pa} && \forall p,a && \text{đủ handler} \tag{4}\\
+&I_{sp}=I_{s,p-1}+\textstyle\sum_{m}Q_{pm1}-o_{sp1},\qquad I_{s0}=0 && \forall s,p && \text{cân bằng tồn kho MTS} \tag{5}\\
+&y_{spt}=\min\Bigl\{\textstyle\sum_m Q_{pmt},\ o_{spt}\Bigr\} && \forall s,p,\ t\in\Tset^{\text{MTO}} && \text{MTO: bán không vượt đơn} \tag{6}\\
+&V_{sp}=j\,\max\{I_{sp},0\}+l\,\max\{-I_{sp},0\} && \forall s,p && \text{phí tồn kho / thiếu hàng} \tag{7}\\
+&F_{sp}=(1+i)F_{s,p-1}-\textstyle\sum_m U_mX_{pm}-\sum_a U^H_aY_{pa}-V_{sp} \notag\\
+&\hspace{3.2em}+\,b_1\,o_{sp1}+\textstyle\sum_{t\in\Tset^{\text{MTO}}}b_t\,y_{spt},\qquad F_{s0}=F_0 && \forall s,p && \text{dòng tiền có lãi} \tag{8}\\
+&h_s=\dfrac{F_{s|\Pset|}}{(1+i)^{|\Pset|}}-\textstyle\sum_m(E_m-D_m)(K_m-K^0_m)-\sum_a(E^H_a-D^H_a)(L_a-L^0_a) && \forall s && \text{lợi nhuận quy về hiện tại} \tag{9}
+\end{align}
+{\color{gr}\small Đánh số theo Wang, Wang \& Chen (2008). (3$'$) là giả định rút gọn của nhóm: mỗi cặp $(m,t)$ dùng đúng 1 loại handler $\eta(m,t)$.
+Hàm mục tiêu có $|\cdot|$ và (6), (7) có $\min/\max$ nên bài toán là MINLP ngẫu nhiên hai giai đoạn; có thể tuyến tính hóa thành MILP nhưng nhóm giải bằng metaheuristic như bài báo gốc.}
+
+\newpage
+%==================================================== TRANG 3: mã hóa, sửa nghiệm, Tabu/SA
+\begin{minipage}[t]{0.49\linewidth}
+\hd{Mã hóa: 1 nghiệm = 135 gen $x\in[0,1]^{135}$}\\[2pt]
+\small
+$3+4$ gen $K,L$ \ $+\ 24$ gen $X$ \ $+\ 32$ gen $Y$ \ $+\ 72$ gen $Q$\\[2pt]
+$K_m=K^0_m+\operatorname{round}(6\,x),\quad X_{pm}=\operatorname{round}(6\,x)$\\
+$Q_{pmt}=x\cdot1.5\,\mu_t\,c_{mt}$\\[6pt]
+\hd{Sửa nghiệm (repair) – luôn thỏa (2), (4)}\\[2pt]
+$Q_{pmt}\leftarrow Q_{pmt}\cdot\min\Bigl\{1,\ \dfrac{L_a+Y_{pa}}{\text{nhu cầu handler}_{pa}}\Bigr\},\ a=\eta(m,t)$\\[3pt]
+$Q_{pmt}\leftarrow Q_{pmt}\cdot\min\Bigl\{1,\ \dfrac{K_m+X_{pm}}{\text{nhu cầu tester}_{pm}}\Bigr\}$\\[3pt]
+{\color{gr}Thiếu máy thì co sản lượng $\Rightarrow$ mọi cá thể đều khả thi.}\\[6pt]
+\hd{Lân cận $\mathcal N(x)$: 174 bước}\\[2pt]
+$K_m\pm1,\ L_a\pm1$ (14) \quad $X_{pm}\pm1,\ Y_{pa}\pm1$ (112)\\
+$Q_{pmt}\!\to\!Q_{pm't}$: chuyển 10\% giữa 2 tester làm được $t$ (48)
+\end{minipage}\hfill
+\begin{minipage}[t]{0.49\linewidth}
+\hd{GA-Tabu (đề xuất)} {\small\color{gr}mỗi 10 thế hệ, top 3, tối đa 20 lần tính $Z$}\\[2pt]
+\small
+$C_n\subset\mathcal N(x_n)$ ngẫu nhiên, $|C_n|=5$\\[2pt]
+$x_{n+1}=\arg\max\bigl\{Z(y):\ y\in C_n,\ \text{bước}\notin\mathcal T_n\ \ \text{hoặc}\ \ Z(y)>Z^\ast\bigr\}$\\[2pt]
+{\color{gr}đi cả khi $Z(x_{n+1})<Z(x_n)$; $Z^\ast$: kỷ lục toàn cục (aspiration)}\\[2pt]
+$\mathcal T_{n+1}=\mathcal T_n\cup\{\text{bước ngược của }x_n\!\to\!x_{n+1}\}$, giữ 7 vòng\\[2pt]
+{\color{org}\bfseries $\mathcal T$ dùng chung cho 3 cá thể trong cùng thế hệ}\\[2pt]
+Ghi ngược $x^{\text{best}}$ vào quần thể (Lamarckian)\\[7pt]
+\hd{GA-SA (đối chứng)}\\[2pt]
+$P(\text{nhận }y)=\min\bigl\{1,\ e^{(Z(y)-Z(x))/T_n}\bigr\}$\\[2pt]$T_n=T_0\,\alpha^{n},\quad \alpha=0.01^{1/20}$ \ {\color{gr}(nguội còn 1\% sau 20 lần)}\\[2pt]
+$T_0=-\operatorname{median}|\Delta Z^-|/\ln 0.5$\\{\color{gr}(ước lượng bằng 30 lần tính $Z$, có tính vào ngân sách)}\\[7pt]
+\hd{So sánh công bằng}\\[2pt]
+Cả 3 thuật toán: quần thể 30, $p_c=0.9$, $p_m=0.05$, tournament 2, elitism 1,
+\textbf{ngân sách 6000 lần tính $Z$}, cùng 10 seed.
+\end{minipage}
+\end{document}
