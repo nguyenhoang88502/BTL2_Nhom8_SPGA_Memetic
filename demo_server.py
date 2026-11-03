@@ -31,9 +31,15 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 import model as mdl  # noqa: E402
 import ga  # noqa: E402
+import exporter  # noqa: E402
 
 DEFAULT_MODEL = dict(K_RISK=mdl.K_RISK, SIGMA=mdl.SIGMA, MU=mdl.MU.copy())
 RUN_LOCK = threading.Lock()
+# Kết quả kiểm định lặp / phân tích độ nhạy được cache lại để /api/export_excel và
+# /api/charts/generate đọc mà không phải chạy lại.
+BENCHMARK_CACHE = {}
+SENSITIVITY_CACHE = {}
+SENSITIVITY_METRICS = {}
 
 # ---------------------------------------------------------------- log ra terminal (cho người xem demo)
 if os.name == "nt":
@@ -43,6 +49,7 @@ COL = {"spga": "\033[94m", "ts": "\033[93m", "sa": "\033[92m", "ok": "\033[92m",
 TAG = {"spga": "SPGA ", "ts": "GA-TS", "sa": "GA-SA"}
 LS_METHOD = {"spga": "none", "ts": "tabu", "sa": "sa"}
 MODES = {"all": ("spga", "ts", "sa"), "spga": ("spga",), "ts": ("ts",), "sa": ("sa",)}
+FULL_LABEL = {"spga": "SPGA gốc", "ts": "GA-TS", "sa": "GA-SA"}
 
 
 def log(msg, col=None):
@@ -60,6 +67,9 @@ DEFAULTS = {
     "ls_freq": 10, "ls_top": 3, "ls_max": 20, "ls_shift": 10, "lamarck": 1,
     "ts_n_cand": ga.TS_N_CAND, "ts_tenure": ga.TS_TENURE, "sa_p0": ga.SA_P0,
     "seed": 1, "mode": "all", "delay": 30,
+    "n_runs": 10, "sens_k_min": 0.0, "sens_k_max": 1.0, "sens_k_steps": 5,
+    "sens_sigma_min": 1000, "sens_sigma_max": 15000, "sens_sigma_steps": 5,
+    "sens_budget": 2000, "sens_runs": 1,
 }
 
 
@@ -118,6 +128,14 @@ def plan_summary(x, scen):
     }
 
 
+def _resample(hist, grid):
+    """Nội suy lịch sử hội tụ [(evals, best)] về lưới evals cố định (cho biểu đồ dải hội tụ)."""
+    n = np.array([p[0] for p in hist])
+    f = np.array([p[1] for p in hist])
+    idx = np.clip(np.searchsorted(n, grid, side="right") - 1, 0, len(f) - 1)
+    return f[idx].tolist()
+
+
 class Handler(BaseHTTPRequestHandler):
     def log_message(self, fmt, *args):  # yên lặng
         pass
@@ -131,7 +149,7 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
-    def send_file(self, path, ctype):
+    def send_file(self, path, ctype, download=None):
         if not os.path.isfile(path):
             self.send_error(404)
             return
@@ -140,7 +158,10 @@ class Handler(BaseHTTPRequestHandler):
         self.send_response(200)
         self.send_header("Content-Type", ctype)
         self.send_header("Content-Length", str(len(body)))
-        self.send_header("Cache-Control", "no-store")
+        if download:
+            self.send_header("Content-Disposition", f'attachment; filename="{download}"')
+        else:
+            self.send_header("Cache-Control", "no-store")
         self.end_headers()
         self.wfile.write(body)
 
@@ -169,6 +190,14 @@ class Handler(BaseHTTPRequestHandler):
             return self.send_json(load_results())
         if u.path == "/api/rerun":
             return self.rerun()
+        if u.path == "/api/benchmark":
+            return self.benchmark(q)
+        if u.path == "/api/sensitivity":
+            return self.sensitivity(q)
+        if u.path == "/api/export_excel":
+            return self.export_excel(q)
+        if u.path == "/api/charts/generate":
+            return self.charts_generate(q)
         if u.path.startswith("/output/"):
             name = os.path.basename(u.path)
             ctype = "image/png" if name.endswith(".png") else "text/plain; charset=utf-8"
@@ -305,6 +334,194 @@ class Handler(BaseHTTPRequestHandler):
             pass
         finally:
             RUN_LOCK.release()
+
+
+    # ------------------------------------------------------------ kiểm định lặp (multi-run benchmark)
+    def benchmark(self, q):
+        if not RUN_LOCK.acquire(blocking=False):
+            return self.send_json({"error": "Đang có một lần chạy khác"}, 409)
+        try:
+            self.start_sse()
+            n_runs = max(fnum(q, "n_runs", int), 1)
+            budget = max(fnum(q, "budget", int), 100)
+            k = min(max(fnum(q, "k"), 0.0), 1.0)
+            sigma = max(fnum(q, "sigma"), 0.0)
+            mu = np.array([fnum(q, "mu1"), fnum(q, "mu2"), fnum(q, "mu3")])
+            n_scen = max(fnum(q, "n_scen", int), 2)
+            scen_seed = fnum(q, "scen_seed", int)
+            mode = q.get("mode", ["all"])[0]
+            codes = MODES.get(mode, MODES["all"])
+            labels = [FULL_LABEL[c] for c in codes]
+            seeds = list(range(1, n_runs + 1))
+            base = FULL_LABEL["spga"] if "spga" in codes else labels[0]
+
+            mdl.K_RISK, mdl.SIGMA = k, sigma
+            mdl.MU = mu
+            mdl.Q_MAX = 1.5 * mdl.MU
+            scen = mdl.sample_scenarios(n_scen, scen_seed)
+            evaluate = functools.partial(mdl.evaluate, scenarios=scen)
+
+            log("=" * 72, "head")
+            log(f"KIỂM ĐỊNH LẶP: {n_runs} seed × {' + '.join(labels)}  (budget {budget}, k={k}, σ={sigma:g})", "head")
+            log("=" * 72, "head")
+            self.sse("start", {"algorithms": labels, "n_runs": n_runs, "seeds": seeds, "budget": budget})
+
+            fitness = {lab: [] for lab in labels}
+            mean_profit = {lab: [] for lab in labels}
+            mad = {lab: [] for lab in labels}
+            runtime = {lab: [] for lab in labels}
+            hist_grid = np.linspace(0, budget, 101).astype(int)
+            histories = {lab: [] for lab in labels}
+
+            for i, s in enumerate(seeds):
+                for code, lab in zip(codes, labels):
+                    bx, hist, rt = ga.run_ga(evaluate, LS_METHOD[code], seed=s, budget=budget)
+                    f, mp, md = evaluate(bx)
+                    fitness[lab].append(f)
+                    mean_profit[lab].append(mp)
+                    mad[lab].append(md)
+                    runtime[lab].append(rt)
+                    histories[lab].append(_resample(hist, hist_grid))
+                self.sse("seed", {"seed": s, "done": i + 1, "total": n_runs,
+                                   "fitness": {lab: fitness[lab][-1] / 1e6 for lab in labels}})
+                log(f"  seed {s:>2}/{n_runs}: " + "   ".join(f"{lab}: {fitness[lab][-1] / 1e6:.3f} tr" for lab in labels), "dim")
+
+            benchmark = {"algorithms": labels, "base": base, "n_runs": n_runs,
+                         "seeds": seeds, "fitness": fitness, "mean_profit": mean_profit,
+                         "mad": mad, "runtime": runtime,
+                         "histories": {"grid": hist_grid.tolist(), **histories},
+                         "params": {"budget": budget, "k": k, "sigma": sigma, "n_scen": n_scen, "scen_seed": scen_seed}}
+            BENCHMARK_CACHE.clear()
+            BENCHMARK_CACHE.update(benchmark)
+            stats = exporter.compute_benchmark_stats(benchmark)
+            self.sse("done", {"summary": stats})
+            log("-" * 72, "head")
+            for a, v in stats["per_alg"].items():
+                log(f"  {a}: TB {v['mean'] / 1e6:.3f} tr ± {v['std'] / 1e6:.3f} (median {v['median'] / 1e6:.3f})", a)
+            if stats["friedman"]:
+                log(f"  Friedman p = {stats['friedman']['p']:.4f}", "bold")
+            for w in stats["wilcoxon"]:
+                log(f"  Wilcoxon {w['a']} vs {w['b']}: p_Holm = {w['p_holm']:.4f}", "bold")
+            log("-" * 72, "head")
+        except (BrokenPipeError, ConnectionResetError, ConnectionAbortedError):
+            log("(trình duyệt đã dừng kiểm định)", "dim")
+        finally:
+            mdl.K_RISK, mdl.SIGMA = DEFAULT_MODEL["K_RISK"], DEFAULT_MODEL["SIGMA"]
+            mdl.MU = DEFAULT_MODEL["MU"].copy()
+            mdl.Q_MAX = 1.5 * mdl.MU
+            RUN_LOCK.release()
+
+    # ------------------------------------------------------------ phân tích độ nhạy
+    def sensitivity(self, q):
+        if not RUN_LOCK.acquire(blocking=False):
+            return self.send_json({"error": "Đang có một lần chạy khác"}, 409)
+        try:
+            self.start_sse()
+            k_min = min(max(fnum(q, "sens_k_min"), 0.0), 1.0)
+            k_max = min(max(fnum(q, "sens_k_max"), 0.0), 1.0)
+            k_steps = max(fnum(q, "sens_k_steps", int), 2)
+            s_min = max(fnum(q, "sens_sigma_min"), 100.0)
+            s_max = max(fnum(q, "sens_sigma_max"), s_min)
+            s_steps = max(fnum(q, "sens_sigma_steps", int), 2)
+            budget = max(fnum(q, "sens_budget", int), 100)
+            sens_runs = max(fnum(q, "sens_runs", int), 1)
+            n_scen = max(fnum(q, "n_scen", int), 2)
+            scen_seed = fnum(q, "scen_seed", int)
+            mode = q.get("mode", ["all"])[0]
+            codes = MODES.get(mode, MODES["all"])
+            labels = [FULL_LABEL[c] for c in codes]
+            mu = DEFAULT_MODEL["MU"].copy()
+
+            if k_max < k_min:
+                k_max, k_min = k_min, k_max
+            k_grid = np.linspace(k_min, k_max, k_steps)
+            sigma_grid = np.linspace(s_min, s_max, s_steps)
+
+            total = len(k_grid) * len(sigma_grid) * len(labels)
+            log("=" * 72, "head")
+            log(f"PHÂN TÍCH ĐỘ NHẠY: k ∈ [{k_min},{k_max}] ({k_steps}) × σ ∈ [{s_min:g},{s_max:g}] ({s_steps}) "
+                f"× {len(labels)} thuật toán = {total} ô", "head")
+            self.sse("start", {"algorithms": labels, "k_grid": k_grid.tolist(),
+                               "sigma_grid": sigma_grid.tolist(), "total": total})
+
+            F = {lab: np.zeros((len(k_grid), len(sigma_grid))) for lab in labels}
+            done = 0
+            for ki, k in enumerate(k_grid):
+                for si, sigma in enumerate(sigma_grid):
+                    mdl.K_RISK = k
+                    mdl.SIGMA = sigma
+                    mdl.MU = mu
+                    mdl.Q_MAX = 1.5 * mu
+                    scen = mdl.sample_scenarios(n_scen, scen_seed)
+                    evaluate = functools.partial(mdl.evaluate, scenarios=scen)
+                    for code, lab in zip(codes, labels):
+                        best_f = -np.inf
+                        for r in range(sens_runs):
+                            bx, _, _ = ga.run_ga(evaluate, LS_METHOD[code], seed=1 + r, budget=budget)
+                            f, _, _ = evaluate(bx)
+                            best_f = max(best_f, f)
+                        F[lab][ki, si] = best_f
+                    done += len(labels)
+                    self.sse("cell", {"k": k, "sigma": sigma, "done": done, "total": total})
+                log(f"  k={k:.2f}: xong {done}/{total} ô", "dim")
+
+            sensitivity = {"algorithms": labels, "k_grid": k_grid.tolist(), "sigma_grid": sigma_grid.tolist(),
+                           "fitness": {lab: F[lab].tolist() for lab in labels}}
+            metrics = exporter.compute_sensitivity_metrics(sensitivity)
+            sensitivity["mean_by_k"] = {lab: metrics[lab]["mean_by_k"] for lab in labels}
+            sensitivity["mean_by_sigma"] = {lab: metrics[lab]["mean_by_sigma"] for lab in labels}
+            SENSITIVITY_CACHE.clear()
+            SENSITIVITY_CACHE.update(sensitivity)
+            SENSITIVITY_METRICS.clear()
+            SENSITIVITY_METRICS.update(metrics)
+            self.sse("done", {"metrics": metrics})
+            log("-" * 72, "head")
+            for lab in labels:
+                m = metrics[lab]
+                log(f"  {lab}: đóng góp k = {m['contribution_k']:.1%}, σ = {m['contribution_sigma']:.1%}, "
+                    f"ổn định = {m['robustness']:.2f}", lab)
+            log("-" * 72, "head")
+        except (BrokenPipeError, ConnectionResetError, ConnectionAbortedError):
+            log("(trình duyệt đã dừng phân tích)", "dim")
+        finally:
+            mdl.K_RISK, mdl.SIGMA = DEFAULT_MODEL["K_RISK"], DEFAULT_MODEL["SIGMA"]
+            mdl.MU = DEFAULT_MODEL["MU"].copy()
+            mdl.Q_MAX = 1.5 * mdl.MU
+            RUN_LOCK.release()
+
+    # ------------------------------------------------------------ xuất báo cáo Excel
+    def export_excel(self, q):
+        if not BENCHMARK_CACHE:
+            return self.send_json({"error": "Chưa có kết quả kiểm định. Hãy chạy kiểm định trước."}, 400)
+        os.makedirs(os.path.join(HERE, "output"), exist_ok=True)
+        path = os.path.join(HERE, "output", "bao_cao_kiem_dinh.xlsx")
+        try:
+            exporter.build_excel_report(BENCHMARK_CACHE, SENSITIVITY_CACHE or None, path)
+        except ImportError as e:
+            return self.send_json({"error": f"Thiếu thư viện: {e}. Chạy: pip install openpyxl"}, 500)
+        except Exception as e:
+            return self.send_json({"error": f"Lỗi xuất Excel: {e}"}, 500)
+        log(f"Đã xuất báo cáo Excel: {os.path.basename(path)}", "ok")
+        return self.send_file(path, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                              download="bao_cao_kiem_dinh.xlsx")
+
+    # ------------------------------------------------------------ biểu đồ backend (Base64)
+    def charts_generate(self, q):
+        if not BENCHMARK_CACHE:
+            return self.send_json({"error": "Chưa có kết quả kiểm định."}, 400)
+        images = {}
+        try:
+            images["overlay"] = exporter.data_url(exporter.overlay_distribution_png(BENCHMARK_CACHE))
+            images["cdf"] = exporter.data_url(exporter.cumulative_probability_png(BENCHMARK_CACHE))
+            if "histories" in BENCHMARK_CACHE:
+                images["band"] = exporter.data_url(exporter.convergence_band_png(BENCHMARK_CACHE["histories"]))
+            if SENSITIVITY_CACHE:
+                images["tornado"] = exporter.data_url(exporter.sensitivity_tornado_png(SENSITIVITY_CACHE, SENSITIVITY_METRICS))
+        except ImportError as e:
+            return self.send_json({"error": f"Thiếu thư viện: {e}. Chạy: pip install matplotlib"}, 500)
+        except Exception as e:
+            return self.send_json({"error": f"Lỗi vẽ biểu đồ: {e}"}, 500)
+        return self.send_json({"images": images})
 
 
 def load_results():

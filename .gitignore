@@ -7,3 +7,4 @@ output_memetic_cu/
 Claude outputs/
 Ket_qua_demo.png
 output/run_log.txt
+output/*.xlsx

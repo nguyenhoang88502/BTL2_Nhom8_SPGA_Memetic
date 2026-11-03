@@ -15,14 +15,23 @@ body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.35 "Segoe UI",sy
   height:100vh;display:flex;flex-direction:column;gap:8px;padding:0 12px 10px;overflow:hidden}
 header{margin:0 -12px;background:var(--spga);color:#fff;padding:8px 16px;display:flex;align-items:center;gap:14px;flex-wrap:wrap}
 h1{font-size:17px;margin:0;font-weight:600;margin-right:auto}
-form#f{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
-form#f label{display:flex;align-items:center;gap:5px;font-size:13px}
-input,select{width:70px;padding:4px 6px;border:0;border-radius:5px;font:inherit;color:var(--ink);background:#fff}
+nav.tabs{display:flex;gap:4px}
+nav.tabs .tab{background:transparent;color:#fff;border:1px solid rgba(255,255,255,.45);border-radius:6px;
+  padding:5px 12px;font:inherit;cursor:pointer;opacity:.82}
+nav.tabs .tab.active{background:#fff;color:var(--spga);opacity:1;font-weight:600}
+.tabpanel{display:none;flex:1;min-height:0}
+.tabpanel.active{display:flex;flex-direction:column;gap:8px}
+.toolbar{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:8px 12px;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.toolbar label{display:flex;align-items:center;gap:5px;font-size:13px}
+input,select{width:70px;padding:4px 6px;border:1px solid #cdd3df;border-radius:5px;font:inherit;color:var(--ink);background:#fff}
 select{width:auto}
 input:disabled,select:disabled{opacity:.6}
-.ghost{background:transparent;color:#fff;border:1px solid rgba(255,255,255,.5);border-radius:6px;padding:5px 10px;font:inherit;cursor:pointer}
+.ghost{background:transparent;color:var(--spga);border:1px solid var(--line);border-radius:6px;padding:5px 10px;font:inherit;cursor:pointer}
 #go{background:var(--ts);color:#fff;border:0;border-radius:6px;padding:7px 22px;font:600 15px "Segoe UI",system-ui,sans-serif;cursor:pointer;min-width:112px}
-#go.running{background:#fff;color:var(--ink)}
+#go.running{background:#fff;color:var(--ink);border:1px solid var(--line)}
+.primary{background:var(--ts);color:#fff;border:0;border-radius:6px;padding:7px 18px;font:600 14px "Segoe UI",system-ui,sans-serif;cursor:pointer}
+.primary.running{background:#fff;color:var(--ink);border:1px solid var(--line)}
+.primary2{background:var(--spga);color:#fff;border:0;border-radius:6px;padding:7px 16px;font:600 14px "Segoe UI",system-ui,sans-serif;cursor:pointer}
 .scores{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
 .score{background:var(--card);border:1px solid var(--line);border-left:5px solid var(--line);border-radius:8px;padding:6px 12px}
 .score.spga{border-left-color:var(--spga)} .score.ts{border-left-color:var(--ts)} .score.sa{border-left-color:var(--sa)}
@@ -62,6 +71,14 @@ td.win{background:var(--win);font-weight:700}
 #feed .blocked{color:var(--muted)}
 #feed .aspiration{font-weight:600}
 .err{color:var(--red)}
+.progress{height:6px;background:#eceff5;border-radius:3px;overflow:hidden;margin-top:2px}
+.progress-bar{height:100%;width:0;background:var(--ts);transition:width .2s}
+.bench-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.25fr);gap:8px;flex:1;min-height:0}
+.bench-grid .card{overflow:auto}
+.charts{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.charts figure{margin:0}
+.charts img{width:100%;border:1px solid var(--line);border-radius:6px;background:#fff}
+.charts figcaption{font-size:12px;color:var(--muted);margin-top:2px}
 dialog{border:0;border-radius:10px;padding:16px 20px;max-width:760px;width:calc(100% - 32px);color:var(--ink);box-shadow:0 12px 40px rgba(0,0,0,.25)}
 dialog::backdrop{background:rgba(20,30,60,.45)}
 dialog h2{margin:0 0 8px;font-size:16px;color:var(--spga)}
@@ -76,6 +93,7 @@ dialog .close{margin-top:12px;background:var(--spga);color:#fff;border:0;border-
   body{height:auto;overflow:auto}
   main{grid-template-columns:minmax(0,1fr)}
   .scores{grid-template-columns:1fr}
+  .bench-grid{grid-template-columns:minmax(0,1fr)}
   #convCard .plot,.plans .plot{height:200px;flex:none}
   #feed{max-height:180px}
 }
@@ -84,7 +102,16 @@ dialog .close{margin-top:12px;background:var(--spga);color:#fff;border:0;border-
 <body>
 <header>
   <h1>SPGA gốc, GA-TS, GA-SA <span style="font-weight:400;opacity:.8">· Nhóm 8</span></h1>
-  <form id="f" novalidate>
+  <nav class="tabs">
+    <button class="tab active" data-tab="single">1. Chạy đơn</button>
+    <button class="tab" data-tab="bench">2. Kiểm định lặp</button>
+    <button class="tab" data-tab="sens">3. Phân tích độ nhạy</button>
+  </nav>
+</header>
+
+<!-- ===================== TAB 1: Chạy đơn ===================== -->
+<section class="tabpanel active" id="tab-single">
+  <form id="f" class="toolbar" novalidate>
     <label>Chạy
       <select name="mode"><option value="all">Cả ba</option><option value="spga">SPGA gốc</option><option value="ts">GA-TS</option><option value="sa">GA-SA</option></select>
     </label>
@@ -98,52 +125,118 @@ dialog .close{margin-top:12px;background:var(--spga);color:#fff;border:0;border-
     <button class="ghost" type="button" id="openHow">Cách hoạt động</button>
     <button id="go" type="submit">▶ Chạy</button>
   </form>
-</header>
 
-<section class="scores">
-  <div class="score spga"><div class="k">SPGA gốc · Z tốt nhất</div>
-    <div class="line"><span class="v" id="z_spga">–</span></div>
-    <div class="s" id="sub_spga">Chưa chạy</div><div class="bar"><i id="bar_spga"></i></div></div>
-  <div class="score ts"><div class="k">GA-TS · Z tốt nhất</div>
-    <div class="line"><span class="v" id="z_ts">–</span><span class="d" id="d_ts"></span></div>
-    <div class="s" id="sub_ts">Chưa chạy</div><div class="bar"><i id="bar_ts"></i></div></div>
-  <div class="score sa"><div class="k">GA-SA · Z tốt nhất</div>
-    <div class="line"><span class="v" id="z_sa">–</span><span class="d" id="d_sa"></span></div>
-    <div class="s" id="sub_sa">Chưa chạy</div><div class="bar"><i id="bar_sa"></i></div></div>
+  <section class="scores">
+    <div class="score spga"><div class="k">SPGA gốc · Z tốt nhất</div>
+      <div class="line"><span class="v" id="z_spga">–</span></div>
+      <div class="s" id="sub_spga">Chưa chạy</div><div class="bar"><i id="bar_spga"></i></div></div>
+    <div class="score ts"><div class="k">GA-TS · Z tốt nhất</div>
+      <div class="line"><span class="v" id="z_ts">–</span><span class="d" id="d_ts"></span></div>
+      <div class="s" id="sub_ts">Chưa chạy</div><div class="bar"><i id="bar_ts"></i></div></div>
+    <div class="score sa"><div class="k">GA-SA · Z tốt nhất</div>
+      <div class="line"><span class="v" id="z_sa">–</span><span class="d" id="d_sa"></span></div>
+      <div class="s" id="sub_sa">Chưa chạy</div><div class="bar"><i id="bar_sa"></i></div></div>
+  </section>
+
+  <main>
+    <div class="col">
+      <div class="card" id="convCard">
+        <h2 id="convTitle">Hội tụ: Z tốt nhất theo số lần đánh giá</h2>
+        <p class="hint" id="convHint">Đường càng cao càng tốt. Chấm tròn là lúc tìm kiếm cục bộ chạy.</p>
+        <div class="plot"><canvas id="cConv"></canvas></div>
+      </div>
+      <div class="card" id="planCard">
+        <h2>Phương án tốt nhất: số tester mỗi quý</h2>
+        <p class="hint">Màu đậm là máy mua, màu nhạt là máy thuê, đường đen là nhu cầu trung bình.</p>
+        <div class="plans">
+          <div class="spga"><b>SPGA gốc</b><div class="plot"><canvas id="cPlan_spga"></canvas></div></div>
+          <div class="ts"><b>GA-TS</b><div class="plot"><canvas id="cPlan_ts"></canvas></div></div>
+          <div class="sa"><b>GA-SA</b><div class="plot"><canvas id="cPlan_sa"></canvas></div></div>
+        </div>
+      </div>
+    </div>
+    <div class="col">
+      <div class="card">
+        <h2>Bảng so sánh</h2>
+        <table>
+          <thead><tr><th>Chỉ số</th><th class="spga">SPGA</th><th class="ts">GA-TS</th><th class="sa">GA-SA</th></tr></thead>
+          <tbody id="tb"></tbody>
+        </table>
+        <p class="hint" id="statLine" style="margin-top:4px"></p>
+      </div>
+      <div class="card" id="feedCard">
+        <h2>Tìm kiếm cục bộ đang làm gì</h2>
+        <ul id="feed"><li class="hint">Bấm ▶ Chạy để xem từng bước của Tabu Search và Simulated Annealing.</li></ul>
+      </div>
+    </div>
+  </main>
 </section>
 
-<main>
-  <div class="col">
-    <div class="card" id="convCard">
-      <h2 id="convTitle">Hội tụ: Z tốt nhất theo số lần đánh giá</h2>
-      <p class="hint" id="convHint">Đường càng cao càng tốt. Chấm tròn là lúc tìm kiếm cục bộ chạy.</p>
-      <div class="plot"><canvas id="cConv"></canvas></div>
+<!-- ===================== TAB 2: Kiểm định lặp ===================== -->
+<section class="tabpanel" id="tab-bench">
+  <form id="benchForm" class="toolbar" novalidate>
+    <label>Số lần lặp N <input name="n_runs" type="number" min="1" style="width:56px"></label>
+    <label>Lần đánh giá
+      <select name="budget"><option value="600">600</option><option value="2000">2000</option><option value="6000">6000 (chuẩn)</option></select>
+    </label>
+    <label>Chạy
+      <select name="mode"><option value="all">Cả ba</option><option value="spga">SPGA gốc</option><option value="ts">GA-TS</option><option value="sa">GA-SA</option></select>
+    </label>
+    <label>k <input name="k" type="number" step="0.1" min="0" max="1" style="width:54px"></label>
+    <label>σ <input name="sigma" type="number" step="1000" min="0"></label>
+    <button id="goBench" type="submit" class="primary">▶ Chạy Kiểm định</button>
+    <button id="exportBtn" type="button" class="primary2">📥 Xuất Excel (.xlsx)</button>
+  </form>
+  <div class="progress"><div class="progress-bar" id="benchBar"></div></div>
+  <p class="hint" id="benchStatus">Chạy nhiều seed để kiểm định thống kê (Friedman, Wilcoxon) và xuất báo cáo Excel.</p>
+
+  <div class="bench-grid">
+    <div class="card">
+      <h2>Thống kê chi tiết</h2>
+      <table id="benchTable"></table>
+      <div id="benchStats" style="margin-top:6px"></div>
     </div>
-    <div class="card" id="planCard">
-      <h2>Phương án tốt nhất: số tester mỗi quý</h2>
-      <p class="hint">Màu đậm là máy mua, màu nhạt là máy thuê, đường đen là nhu cầu trung bình.</p>
-      <div class="plans">
-        <div class="spga"><b>SPGA gốc</b><div class="plot"><canvas id="cPlan_spga"></canvas></div></div>
-        <div class="ts"><b>GA-TS</b><div class="plot"><canvas id="cPlan_ts"></canvas></div></div>
-        <div class="sa"><b>GA-SA</b><div class="plot"><canvas id="cPlan_sa"></canvas></div></div>
+    <div class="card">
+      <h2>Biểu đồ phong cách Crystal Ball</h2>
+      <div class="charts">
+        <figure><img id="chartOverlay" alt="Phân bố tần suất"><figcaption>Phân bố tần suất (Overlay)</figcaption></figure>
+        <figure><img id="chartCdf" alt="CDF"><figcaption>Xác suất tích lũy (CDF)</figcaption></figure>
+        <figure><img id="chartBand" alt="Dải hội tụ"><figcaption>Dải hội tụ (TB ± std, 10–90%)</figcaption></figure>
+        <figure><img id="chartTornado" alt="Tornado" style="display:none"><figcaption id="chartTornadoCap" style="display:none">Tornado độ nhạy</figcaption></figure>
       </div>
     </div>
   </div>
-  <div class="col">
+</section>
+
+<!-- ===================== TAB 3: Phân tích độ nhạy ===================== -->
+<section class="tabpanel" id="tab-sens">
+  <form id="sensForm" class="toolbar" novalidate>
+    <label>k từ <input name="sens_k_min" type="number" step="0.1" min="0" max="1" style="width:54px"></label>
+    <label>đến <input name="sens_k_max" type="number" step="0.1" min="0" max="1" style="width:54px"></label>
+    <label>bước <input name="sens_k_steps" type="number" min="2" style="width:48px"></label>
+    <label>σ từ <input name="sens_sigma_min" type="number" step="500" style="width:70px"></label>
+    <label>đến <input name="sens_sigma_max" type="number" step="500" style="width:70px"></label>
+    <label>bước <input name="sens_sigma_steps" type="number" min="2" style="width:48px"></label>
+    <label>Lần đánh giá
+      <select name="sens_budget"><option value="600">600</option><option value="1500">1500</option><option value="2000">2000</option></select>
+    </label>
+    <button id="goSens" type="submit" class="primary">▶ Chạy Độ nhạy</button>
+  </form>
+  <div class="progress"><div class="progress-bar" id="sensBar"></div></div>
+  <p class="hint" id="sensStatus">Quét tham số k và σ để đo mức đóng góp vào biến động của từng thuật toán.</p>
+
+  <div class="bench-grid">
     <div class="card">
-      <h2>Bảng so sánh</h2>
-      <table>
-        <thead><tr><th>Chỉ số</th><th class="spga">SPGA</th><th class="ts">GA-TS</th><th class="sa">GA-SA</th></tr></thead>
-        <tbody id="tb"></tbody>
-      </table>
-      <p class="hint" id="statLine" style="margin-top:4px"></p>
+      <h2>Mức đóng góp & độ ổn định</h2>
+      <table id="sensTable"></table>
+      <p class="hint" style="margin-top:6px">Đóng góp k/σ = phần phương sai của Z do riêng tham số đó gây ra. Ổn định = mean/std càng cao càng tốt.</p>
     </div>
-    <div class="card" id="feedCard">
-      <h2>Tìm kiếm cục bộ đang làm gì</h2>
-      <ul id="feed"><li class="hint">Bấm ▶ Chạy để xem từng bước của Tabu Search và Simulated Annealing.</li></ul>
+    <div class="card">
+      <h2>Biểu đồ Tornado độ nhạy</h2>
+      <figure style="margin:0"><img id="chartTornado2" alt="Tornado" style="width:100%;border:1px solid var(--line);border-radius:6px"></figure>
     </div>
   </div>
-</main>
+</section>
 
 <dialog id="lsDialog">
   <h2>Tham số tìm kiếm cục bộ</h2>
@@ -193,6 +286,8 @@ const NAME = {spga:"SPGA", ts:"GA-TS", sa:"GA-SA"};
 const ALGOS = ["spga","ts","sa"];
 const LABEL = {spga:"SPGA gốc", ts:"GA-TS", sa:"GA-SA"};
 const PARAMS = ["mode","seed","budget","k","sigma","ls_freq","ls_top","ls_max","ts_n_cand","ts_tenure","sa_p0"];
+const BENCH_PARAMS = ["n_runs","budget","mode","k","sigma"];
+const SENS_PARAMS = ["sens_k_min","sens_k_max","sens_k_steps","sens_sigma_min","sens_sigma_max","sens_sigma_steps","sens_budget"];
 const $ = s => document.querySelector(s);
 const fmt = (v, d=2) => (v==null||!isFinite(v)) ? "–" : v.toLocaleString("vi-VN",{minimumFractionDigits:d,maximumFractionDigits:d});
 const signed = (v, d=2) => (v==null||!isFinite(v)) ? "–" : (v>=0?"+":"") + fmt(v,d);
@@ -223,7 +318,6 @@ const freshAlgo = () => ({hist:[], plan:null, lsMarks:[], done:null, best:null, 
 // ------------------------------------------------------------- charts
 function drawConv(){
   const [g,w,h] = prep($("#cConv"));
-  // Chưa chạy thì hiện đường trung bình đã lưu, để màn hình không trống.
   let series = null, xMax = budget;
   if (S) series = S.algos.map(a => ({a, pts:S.a[a].hist, step:true, marks:S.a[a].lsMarks}));
   else if (RES?.curves){
@@ -249,7 +343,6 @@ function drawConv(){
     for (const [n,f] of s.marks){ g.beginPath(); g.arc(X(n),Y(f),2.6,0,7); g.fill(); }
   }
   g.restore();
-  // Ghi nhãn ngay cuối đường, khỏi phải dò chú thích; các nhãn gần nhau thì đẩy ra.
   const ends = series.filter(s=>s.pts.length).map(s=>{ const p=s.pts[s.pts.length-1]; return {a:s.a, x:X(p[0]), y:Y(p[1]), v:p[1]}; }).sort((p,q)=>p.y-q.y);
   const gap = 28, top = pad.t+12, bottom = h-pad.b-12;
   for (let i=1;i<ends.length;i++) ends[i].y = Math.max(ends[i].y, ends[i-1].y+gap);
@@ -263,7 +356,6 @@ function drawPlan(a){
   const [g,w,h] = prep($("#cPlan_"+a)), P = S?.a[a].plan;
   if (S && !S.algos.includes(a)) return empty(g,w,h,"Không chạy");
   if (!P) return empty(g,w,h,"Chưa có phương án");
-  // Các biểu đồ dùng chung trục Y để so sánh trực tiếp.
   const plans = S.algos.map(x=>S.a[x].plan).filter(Boolean);
   const hi = Math.max(...plans.flatMap(p=>[...p.owned.map((o,i)=>o+p.rented[i]), ...p.need]))*1.1||1;
   const pad = {l:24,r:2,t:4,b:18}, Y = v => h-pad.b-v/hi*(h-pad.t-pad.b);
@@ -290,7 +382,6 @@ function updateScores(){
     $("#sub_"+a).textContent = !on ? "Không chạy" : st.done ? `Xong · ${st.gen} thế hệ · ${fmt(st.done.runtime,1)} giây` : `Thế hệ ${st.gen} · ${st.evals}/${budget} lần đánh giá`;
     $("#bar_"+a).style.width = on ? Math.min(100,100*st.evals/budget)+"%" : "0";
   }
-  // So tại cùng số lần đánh giá, vì ba thuật toán tiến với tốc độ khác nhau.
   for (const a of ["ts","sa"]){
     const el = $("#d_"+a); el.textContent = "";
     if (!S.algos.includes(a) || !S.algos.includes("spga")) continue;
@@ -301,7 +392,6 @@ function updateScores(){
     el.style.color = d>=0 ? INK.sa : "var(--red)";
   }
 }
-// dir: +1 = càng cao càng tốt, -1 = càng thấp càng tốt, 0 = không so
 function row(label, vals, d, dir){
   const nums = vals.filter(v=>v!=null && isFinite(v));
   const best = dir && nums.length>1 ? (dir>0?Math.max(...nums):Math.min(...nums)) : null;
@@ -350,7 +440,7 @@ function addFeed(d){
   while (box.children.length>40) box.lastChild.remove();
 }
 
-// ------------------------------------------------------------- chạy
+// ------------------------------------------------------------- chạy đơn
 const form = $("#f");
 function running(on){
   $("#go").textContent = on ? "■ Dừng" : "▶ Chạy"; $("#go").classList.toggle("running",on);
@@ -394,12 +484,152 @@ $("#openLs").onclick = () => $("#lsDialog").showModal();
 $("#openHow").onclick = () => $("#howDialog").showModal();
 document.querySelectorAll("dialog .close").forEach(b => b.onclick = () => b.closest("dialog").close());
 
+// ------------------------------------------------------------- điều hướng tab
+function switchTab(t){
+  document.querySelectorAll(".tab").forEach(x => x.classList.toggle("active", x.dataset.tab === t));
+  document.querySelectorAll(".tabpanel").forEach(x => x.classList.toggle("active", x.id === "tab-"+t));
+  if (t === "single") redraw();
+}
+document.querySelectorAll(".tab").forEach(b => b.onclick = () => switchTab(b.dataset.tab));
+
+// ------------------------------------------------------------- kiểm định lặp
+const benchForm = $("#benchForm");
+let esBench = null;
+function benchRunning(on){
+  $("#goBench").textContent = on ? "■ Dừng" : "▶ Chạy Kiểm định";
+  $("#goBench").classList.toggle("running", on);
+  $("#exportBtn").disabled = on;
+  [...benchForm.elements].filter(x=>x.name).forEach(x=>x.disabled=on);
+}
+function stopBench(){ if(esBench){ esBench.close(); esBench=null; } benchRunning(false); }
+function renderBenchTable(s){
+  const algs = Object.keys(s.per_alg);
+  const v = a => s.per_alg[a];
+  let html = `<thead><tr><th>Chỉ số</th>${algs.map(a=>`<th>${a}</th>`).join("")}</tr></thead><tbody>`;
+  html += row("Z trung bình (triệu)", algs.map(a=>v(a).mean/1e6), 2, 1);
+  html += row("Độ lệch chuẩn (triệu)", algs.map(a=>v(a).std/1e6), 2, -1);
+  html += row("Trung vị (triệu)", algs.map(a=>v(a).median/1e6), 2, 1);
+  html += row("Nhỏ nhất (triệu)", algs.map(a=>v(a).min/1e6), 2, 0);
+  html += row("Lớn nhất (triệu)", algs.map(a=>v(a).max/1e6), 2, 1);
+  html += row("Cải thiện so với gốc (%)", algs.map(a=>v(a).improvement_pct), 2, 1);
+  html += row("Win-rate so với gốc", algs.map(a=>v(a).win_rate), 2, 1);
+  html += "</tbody>";
+  $("#benchTable").innerHTML = html;
+  let st = "";
+  if (s.friedman) st += `<p class="hint">Friedman p = ${fmt(s.friedman.p,4)}</p>`;
+  for (const w of (s.wilcoxon||[])) st += `<p class="hint">Wilcoxon ${w.a} vs ${w.b}: p (Holm) = ${fmt(w.p_holm,4)}</p>`;
+  $("#benchStats").innerHTML = st;
+}
+async function loadBenchCharts(){
+  try {
+    const r = await fetch("/api/charts/generate");
+    const j = await r.json();
+    if (j.error){ $("#benchStatus").innerHTML = `<span class="err">${j.error}</span>`; return; }
+    const im = j.images || {};
+    if (im.overlay) $("#chartOverlay").src = im.overlay;
+    if (im.cdf) $("#chartCdf").src = im.cdf;
+    if (im.band) $("#chartBand").src = im.band;
+    if (im.tornado){
+      $("#chartTornado").src = im.tornado; $("#chartTornado").style.display = "";
+      $("#chartTornadoCap").style.display = ""; $("#chartTornado2").src = im.tornado;
+    }
+  } catch(e){ /* im lặng */ }
+}
+async function exportExcel(){
+  try {
+    const r = await fetch("/api/export_excel");
+    if (r.headers.get("content-type").includes("json")){
+      const e = await r.json(); alert(e.error || "Không xuất được báo cáo."); return;
+    }
+    const blob = await r.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a"); a.href = url; a.download = "bao_cao_kiem_dinh.xlsx"; a.click();
+    URL.revokeObjectURL(url);
+  } catch(e){ alert("Không xuất được báo cáo."); }
+}
+function startBench(){
+  const q = new URLSearchParams();
+  for (const k of BENCH_PARAMS) if (benchForm.elements[k].value!=="") q.set(k, benchForm.elements[k].value);
+  const n = +benchForm.elements["n_runs"].value || 10;
+  $("#benchStatus").textContent = "Đang kiểm định…"; $("#benchBar").style.width = "0";
+  benchRunning(true);
+  esBench = new EventSource("/api/benchmark?"+q.toString());
+  esBench.addEventListener("start", e => {
+    const d = JSON.parse(e.data);
+    $("#benchStatus").textContent = `Chạy ${d.n_runs} seed × ${d.algorithms.length} thuật toán (budget ${d.budget})…`;
+  });
+  esBench.addEventListener("seed", e => {
+    const d = JSON.parse(e.data);
+    $("#benchBar").style.width = Math.round(100*d.done/d.total) + "%";
+    const parts = Object.entries(d.fitness).map(([a,f])=>`${a}: ${fmt(f)} tr`).join("  ·  ");
+    $("#benchStatus").textContent = `Seed ${d.seed}/${d.total}: ${parts}`;
+  });
+  esBench.addEventListener("done", e => {
+    const d = JSON.parse(e.data);
+    $("#benchBar").style.width = "100%";
+    renderBenchTable(d.summary);
+    $("#benchStatus").textContent = "Xong. Bấm 📥 Xuất Excel để tải báo cáo.";
+    stopBench(); loadBenchCharts();
+  });
+  esBench.onerror = () => { if(!esBench) return; stopBench();
+    $("#benchStatus").innerHTML = '<span class="err">Mất kết nối server, hoặc đang có lần chạy khác.</span>'; };
+}
+benchForm.onsubmit = ev => { ev.preventDefault(); esBench ? stopBench() : startBench(); };
+$("#exportBtn").onclick = exportExcel;
+
+// ------------------------------------------------------------- phân tích độ nhạy
+const sensForm = $("#sensForm");
+let esSens = null;
+function sensRunning(on){
+  $("#goSens").textContent = on ? "■ Dừng" : "▶ Chạy Độ nhạy";
+  $("#goSens").classList.toggle("running", on);
+  [...sensForm.elements].filter(x=>x.name).forEach(x=>x.disabled=on);
+}
+function stopSens(){ if(esSens){ esSens.close(); esSens=null; } sensRunning(false); }
+function renderSensTable(metrics){
+  const algs = Object.keys(metrics);
+  let html = `<thead><tr><th>Chỉ số</th>${algs.map(a=>`<th>${a}</th>`).join("")}</tr></thead><tbody>`;
+  html += row("Đóng góp của k (%)", algs.map(a=>metrics[a].contribution_k*100), 1, 1);
+  html += row("Đóng góp của σ (%)", algs.map(a=>metrics[a].contribution_sigma*100), 1, 1);
+  html += row("Ổn định (mean/std)", algs.map(a=>metrics[a].robustness), 2, 1);
+  html += "</tbody>";
+  $("#sensTable").innerHTML = html;
+}
+function startSens(){
+  const q = new URLSearchParams();
+  for (const k of SENS_PARAMS) if (sensForm.elements[k].value!=="") q.set(k, sensForm.elements[k].value);
+  $("#sensStatus").textContent = "Đang quét tham số…"; $("#sensBar").style.width = "0";
+  sensRunning(true);
+  esSens = new EventSource("/api/sensitivity?"+q.toString());
+  esSens.addEventListener("start", e => {
+    const d = JSON.parse(e.data);
+    $("#sensStatus").textContent = `${d.total} ô (${d.k_grid.length} giá trị k × ${d.sigma_grid.length} giá trị σ × ${d.algorithms.length} thuật toán)…`;
+  });
+  esSens.addEventListener("cell", e => {
+    const d = JSON.parse(e.data);
+    $("#sensBar").style.width = Math.round(100*d.done/d.total) + "%";
+    $("#sensStatus").textContent = `k=${fmt(d.k,2)}, σ=${fmt(d.sigma,0)} — ${d.done}/${d.total} ô`;
+  });
+  esSens.addEventListener("done", e => {
+    const d = JSON.parse(e.data);
+    $("#sensBar").style.width = "100%";
+    renderSensTable(d.metrics);
+    $("#sensStatus").textContent = "Xong.";
+    stopSens(); loadBenchCharts();
+  });
+  esSens.onerror = () => { if(!esSens) return; stopSens();
+    $("#sensStatus").innerHTML = '<span class="err">Mất kết nối server, hoặc đang có lần chạy khác.</span>'; };
+}
+sensForm.onsubmit = ev => { ev.preventDefault(); esSens ? stopSens() : startSens(); };
+
 // ------------------------------------------------------------- khởi động
 (async()=>{
   try { defaults = await (await fetch("/api/defaults")).json(); }
   catch(e){ $("#statLine").innerHTML = '<span class="err">Không kết nối được server. Hãy mở bằng CHAY_DEMO.bat.</span>'; return; }
   for (const k of PARAMS) form.elements[k].value = defaults[k];
   budget = defaults.budget;
+  for (const k of BENCH_PARAMS) if (benchForm.elements[k]) benchForm.elements[k].value = defaults[k];
+  for (const k of SENS_PARAMS) if (sensForm.elements[k]) sensForm.elements[k].value = defaults[k];
   try { RES = await (await fetch("/api/results")).json(); } catch(e){ RES = null; }
   if (RES?.curves){ $("#convTitle").textContent = "Hội tụ trung bình của thực nghiệm đã lưu"; $("#convHint").textContent = "Bấm ▶ Chạy để xem ba thuật toán chạy trực tiếp."; }
   renderStatLine(); renderTable(); redraw();
