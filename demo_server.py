@@ -78,6 +78,7 @@ DEFAULTS = {
     "n_runs": 10, "sens_k_min": 0.0, "sens_k_max": 1.0, "sens_k_steps": 5,
     "sens_sigma_min": 1000, "sens_sigma_max": 15000, "sens_sigma_steps": 5,
     "sens_budget": 2000, "sens_runs": 1, "alpha": 0.05, "time_limit": 120,
+    "stopping": "evaluations", "time_limit_sec": 180.0,
 }
 
 
@@ -291,6 +292,10 @@ class Handler(BaseHTTPRequestHandler):
                       lamarck=bool(fnum(q, "lamarck", int)),
                       ts_n_cand=max(fnum(q, "ts_n_cand", int), 1), ts_tenure=max(fnum(q, "ts_tenure", int), 0),
                       sa_p0=min(max(fnum(q, "sa_p0"), 0.01), 0.99))
+            stopping = q.get("stopping", ["evaluations"])[0]
+            stopping = stopping if stopping in ("evaluations", "time") else "evaluations"
+            kw["stopping_criterion"] = stopping
+            kw["time_limit_sec"] = max(fnum(q, "time_limit_sec"), 1.0)
             seed = fnum(q, "seed", int)
             mode = q.get("mode", ["all"])[0]
             names = MODES.get(mode, MODES["all"])
@@ -311,8 +316,10 @@ class Handler(BaseHTTPRequestHandler):
             log(f"BẮT ĐẦU CHẠY: {' + '.join(TAG[a].strip() for a, _ in algos)}   (seed {seed})", "head")
             log(f"  Bài toán : k={mdl.K_RISK}  μ={[int(v) for v in mdl.MU]}  σ={mdl.SIGMA:g}  "
                 f"N={len(scen)} kịch bản (seed {fnum(q, 'scen_seed', int)})", "head")
+            stop_desc = (f"ngân sách {kw['budget']} lần đánh giá" if kw["stopping_criterion"] == "evaluations"
+                         else f"giới hạn {kw['time_limit_sec']:g} giây")
             log(f"  GA       : quần thể={kw['pop_size']}  pc={kw['pc']}  pm={kw['pm']}  tournament={kw['tour']}  "
-                f"ngân sách={kw['budget']} lần đánh giá", "head")
+                f"dừng theo {stop_desc}", "head")
             if "ts" in names or "sa" in names:
                 log(f"  Cục bộ   : mỗi {kw['ls_freq']} thế hệ, top {kw['ls_top']}, tối đa {kw['ls_max_evals']} "
                     f"lần/cá thể, chuyển {kw['ls_shift']:.0%}, {'Lamarckian' if kw['lamarck'] else 'Baldwinian'}", "head")
@@ -324,6 +331,7 @@ class Handler(BaseHTTPRequestHandler):
                 log(f"  GA-LP    : 63 gen máy móc + LP (HiGHS) tối ưu sản lượng cho từng phương án", "head")
             log("=" * 72, "head")
             self.sse("start", {"algos": [a for a, _ in algos], "budget": kw["budget"],
+                               "stopping": kw["stopping_criterion"], "time_limit_sec": kw["time_limit_sec"],
                                "n_scen": len(scen), "pop": kw["pop_size"]})
 
             best_seen = {a: -np.inf for a, _ in algos}
@@ -351,7 +359,9 @@ class Handler(BaseHTTPRequestHandler):
                         best_seen[name] = st["best_f"]
                         payload["plan"] = _plan_for(name, st["best_x"], scen, ev_ml)
                     self.sse("gen", payload)
-                    head = f"[{TAG[name]}] thế hệ {st['gen']:>3} | {st['evals']:>5}/{kw['budget']} đánh giá | "
+                    head = (f"[{TAG[name]}] thế hệ {st['gen']:>3} | {st['runtime']:>5.1f}/{kw['time_limit_sec']:g} giây | "
+                            if kw["stopping_criterion"] == "time" else
+                            f"[{TAG[name]}] thế hệ {st['gen']:>3} | {st['evals']:>5}/{kw['budget']} đánh giá | ")
                     if improved:
                         pl = payload["plan"]
                         log(head + f"Z tốt nhất = {payload['best']:.3f} tr  ▲ "
@@ -423,6 +433,10 @@ class Handler(BaseHTTPRequestHandler):
             self.start_sse()
             n_runs = max(fnum(q, "n_runs", int), 1)
             budget = max(fnum(q, "budget", int), 100)
+            stopping = q.get("stopping", ["evaluations"])[0]
+            stopping = stopping if stopping in ("evaluations", "time") else "evaluations"
+            time_limit_sec = max(fnum(q, "time_limit_sec"), 1.0)
+            stop_kw = dict(stopping_criterion=stopping, time_limit_sec=time_limit_sec)
             k = min(max(fnum(q, "k"), 0.0), 1.0)
             sigma = max(fnum(q, "sigma"), 0.0)
             mu = np.array([fnum(q, "mu1"), fnum(q, "mu2"), fnum(q, "mu3")])
@@ -448,15 +462,20 @@ class Handler(BaseHTTPRequestHandler):
                         time_limit=fnum(q, "time_limit", int))
 
             log("=" * 72, "head")
-            log(f"KIỂM ĐỊNH LẶP: {n_runs} seed × {' + '.join(labels)}  (budget {budget}, k={k}, σ={sigma:g})", "head")
+            stop_desc = (f"budget {budget}" if stopping == "evaluations" else f"thời gian {time_limit_sec:g} giây")
+            log(f"KIỂM ĐỊNH LẶP: {n_runs} seed × {' + '.join(labels)}  (dừng theo {stop_desc}, k={k}, σ={sigma:g})", "head")
             log("=" * 72, "head")
             self.sse("start", {"algorithms": labels, "n_runs": n_runs, "seeds": seeds, "budget": budget,
+                               "stopping": stopping, "time_limit_sec": time_limit_sec,
                                "hypothesis": {"h0": h0, "h1": h1, "alpha": alpha}})
 
             fitness = {lab: [] for lab in labels}
             mean_profit = {lab: [] for lab in labels}
             mad = {lab: [] for lab in labels}
             runtime = {lab: [] for lab in labels}
+            total_evaluations = {lab: [] for lab in labels}
+            evals_per_sec = {lab: [] for lab in labels}
+            time_history = {lab: [] for lab in labels}
             runs = []
 
             for i, s in enumerate(seeds):
@@ -466,9 +485,9 @@ class Handler(BaseHTTPRequestHandler):
                     if c == "ml":
                         algos.append((c, ga.run_ga_iter(ev_ml.evaluate, "none", s, budget,
                                                         repair_fn=matheuristics.repair_ml,
-                                                        n_genes=matheuristics.N_GENES_ML)))
+                                                        n_genes=matheuristics.N_GENES_ML, **stop_kw)))
                     else:
-                        algos.append((c, ga.run_ga_iter(evaluate, LS_METHOD[c], s, budget)))
+                        algos.append((c, ga.run_ga_iter(evaluate, LS_METHOD[c], s, budget, **stop_kw)))
                 best_seen = {c: -np.inf for c, _ in algos}
                 finished = {c: None for c, _ in algos}
                 final_state = {c: None for c, _ in algos}
@@ -506,10 +525,18 @@ class Handler(BaseHTTPRequestHandler):
                     fitness[lab].append(f)
                     mean_profit[lab].append(mp)
                     mad[lab].append(md)
-                    runtime[lab].append(st["runtime"])
+                    rt_c = st["runtime"]
+                    ev_c = st["evals"]
+                    runtime[lab].append(rt_c)
+                    total_evaluations[lab].append(ev_c)
+                    evals_per_sec[lab].append(ev_c / rt_c if rt_c > 0 else 0.0)
+                    time_history[lab].append(st["time_history"])
                     hist = [[int(hist_grid[j]), float(v)] for j, v in enumerate(_resample(st["history"], hist_grid))]
                     run_detail["algorithms"][lab] = {"fitness": f, "mean_profit": mp, "mad": md,
-                                                     "runtime": st["runtime"], "history": hist,
+                                                     "runtime": rt_c, "history": hist,
+                                                     "total_evaluations": ev_c,
+                                                     "evals_per_sec": ev_c / rt_c if rt_c > 0 else 0.0,
+                                                     "time_history": st["time_history"],
                                                      "plan": run_plan.get(lab)}
                 runs.append(run_detail)
                 best_lab = max(labels, key=lambda lb: run_detail["algorithms"][lb]["fitness"])
@@ -535,9 +562,12 @@ class Handler(BaseHTTPRequestHandler):
 
             benchmark = {"algorithms": labels, "base": base, "n_runs": n_runs, "seeds": seeds,
                          "fitness": fitness, "mean_profit": mean_profit, "mad": mad, "runtime": runtime,
+                         "total_evaluations": total_evaluations, "evals_per_sec": evals_per_sec,
+                         "time_history": time_history,
                          "leaderboard": leaderboard, "runs": runs,
                          "hypothesis": {"h0": h0, "h1": h1, "alpha": alpha},
-                         "params": {"budget": budget, "k": k, "sigma": sigma, "n_scen": n_scen, "scen_seed": scen_seed}}
+                         "params": {"budget": budget, "k": k, "sigma": sigma, "n_scen": n_scen, "scen_seed": scen_seed,
+                                    "stopping": stopping, "time_limit_sec": time_limit_sec}}
             BENCHMARK_CACHE.clear()
             BENCHMARK_CACHE.update(benchmark)
             stats = exporter.compute_benchmark_stats(benchmark)

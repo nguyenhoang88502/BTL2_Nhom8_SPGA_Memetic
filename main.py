@@ -3,14 +3,17 @@ main.py - chạy thực nghiệm so sánh SPGA gốc, GA-TS và GA-SA (Phần 4)
 
     python main.py            # thí nghiệm chính + ablation
     python main.py --quick    # chỉ thí nghiệm chính
+    python main.py --stopping time --time-limit 180   # dừng theo thời gian thực
 
 Đầu ra (thư mục output/):
     results.csv            mỗi dòng = 1 lần chạy (thuật toán, seed, chỉ số)
     history.csv            fitness tốt nhất theo số lần gọi evaluate
+    history_time.csv       fitness tốt nhất theo thời gian thực (elapsed_s, evals, best_z, mean, mad)
     summary.csv            trung bình / độ lệch chuẩn / min / max theo thuật toán
     stats.txt              Friedman, Wilcoxon theo cặp hiệu chỉnh Holm, số seed thắng
     best_portfolio.csv     danh mục máy của nghiệm tốt nhất (giống Bảng 1 bài báo)
-    fig_convergence.png    biểu đồ hội tụ trung bình, dải ±1 độ lệch chuẩn
+    fig_convergence.png    biểu đồ hội tụ trung bình, dải ±1 độ lệch chuẩn (theo evaluate)
+    fig_convergence_time.png  biểu đồ hội tụ Z_best theo thời gian thực (giây)
     fig_boxplot.png        boxplot fitness 10 lần chạy
     ablation.csv           các biến thể của TS và SA, cùng hill climbing cũ
     fig_ablation.png       biểu đồ ablation
@@ -48,6 +51,14 @@ def first_reach(hist, target):
     for n, f in hist:
         if f >= target:
             return n
+    return np.nan
+
+
+def first_reach_time(thist, target):
+    """Thời điểm (giây) đầu tiên đạt target trên lịch sử hội tụ theo thời gian thực."""
+    for t, n, f, mean, mad in thist:
+        if f >= target:
+            return t
     return np.nan
 
 
@@ -124,6 +135,28 @@ def plot_main(df, all_hist):
     fig.tight_layout(); fig.savefig(f"{OUT}/fig_boxplot.png"); plt.close(fig)
 
 
+def plot_time(all_time_hist):
+    """Biểu đồ hội tụ Z_best theo THỜI GIAN THỰC (mỗi đường = 1 lần chạy).
+
+    Trục x là giây thực, trục y là fitness tốt nhất. Vì mỗi lần chạy có trục thời gian
+    riêng nên không nội suy lưới chung; vẽ từng đường mảnh theo màu thuật toán."""
+    plt.rcParams.update({"font.family": "DejaVu Sans", "font.size": 10})
+    fig, ax = plt.subplots(figsize=(7.5, 4.2), dpi=200)
+    for alg, ths in all_time_hist.items():
+        for s, th in ths.items():
+            if not th:
+                continue
+            t = np.array([x[0] for x in th])
+            f = np.array([x[2] for x in th]) / 1e6
+            ax.plot(t, f, color=COLORS[alg], lw=1.0, alpha=0.55)
+    handles = [plt.Line2D([0], [0], color=COLORS[a], lw=2, label=a) for a in COLORS]
+    ax.legend(handles=handles, loc="lower right")
+    ax.set_xlabel("Thời gian thực (giây)")
+    ax.set_ylabel("Fitness tốt nhất (triệu)")
+    ax.grid(alpha=0.3)
+    fig.tight_layout(); fig.savefig(f"{OUT}/fig_convergence_time.png"); plt.close(fig)
+
+
 def run_ablation(df, evaluate, evaluate_test):
     """So các biến thể trên 10 seed. p_vs_base: Wilcoxon hai phía so với cấu hình chuẩn của thuật
     toán đó, chưa hiệu chỉnh đa so sánh."""
@@ -179,45 +212,54 @@ def run_ablation(df, evaluate, evaluate_test):
     fig.tight_layout(); fig.savefig(f"{OUT}/fig_ablation.png"); plt.close(fig)
 
 
-def main(quick=False):
+def main(quick=False, stopping="evaluations", time_limit=None):
     started = time.perf_counter()
     os.makedirs(OUT, exist_ok=True)
     scen = mdl.sample_scenarios(N_SCEN, SCEN_SEED)
     test = mdl.sample_scenarios(TEST_SCEN, TEST_SEED)
     evaluate = functools.partial(mdl.evaluate, scenarios=scen)
     evaluate_test = functools.partial(mdl.evaluate, scenarios=test)
+    stop_kw = dict(stopping_criterion=stopping, time_limit_sec=time_limit)
 
     print(f"Python {platform.python_version()}, numpy {np.__version__}, "
           f"{platform.processor() or platform.machine()}")
+    print(f"Điều kiện dừng: {stopping}"
+          + (f" (ngân sách {ga.BUDGET})" if stopping == "evaluations" else f" (tối đa {time_limit:g} giây)"))
 
     # ---------------------------------------------------- thí nghiệm chính
-    all_rows, all_hist = [], {}
+    all_rows, all_hist, all_time_hist = [], {}, {}
     for method, label in LABEL.items():
-        rows, hists = run_set(evaluate, method, SEEDS)
+        rows, hists = run_set(evaluate, method, SEEDS, **stop_kw)
+        th = {}
         for r in rows:
             r["algorithm"] = label
+            th[r["seed"]] = r.pop("time_history")
         all_rows += rows
         all_hist[label] = hists
+        all_time_hist[label] = th
         print(f"{label:10s} xong: fitness TB = {np.mean([r['fitness'] for r in rows]):,.0f}", flush=True)
 
     df = pd.DataFrame(all_rows)
-    # chỉ số hội tụ
+    # chỉ số hội tụ (theo số lần evaluate và theo thời gian thực)
     target = df[df.algorithm == BASE].fitness.median()
     for i, r in df.iterrows():
         h = all_hist[r.algorithm][r.seed]
         f_init, f_fin = h[ga.POP_SIZE - 1][1], h[-1][1]
         df.loc[i, "evals_to_95pct_gain"] = first_reach(h, f_init + 0.95 * (f_fin - f_init))
         df.loc[i, "evals_to_spga_median"] = first_reach(h, target)
+        df.loc[i, "time_to_95pct_gain"] = first_reach_time(
+            all_time_hist[r.algorithm][r.seed], f_init + 0.95 * (f_fin - f_init))
         tf, tm, td = evaluate_test(r.best_x)
         df.loc[i, "test_fitness"], df.loc[i, "test_mean_profit"], df.loc[i, "test_mad"] = tf, tm, td
 
     cols = ["algorithm", "seed", "fitness", "mean_profit", "mad", "runtime_s",
-            "evals_to_95pct_gain", "evals_to_spga_median", "test_fitness",
-            "test_mean_profit", "test_mad", "generations", "ls_evals", "evals",
-            "ls_runs", "ls_steps", "ls_worse", "ls_aspiration", "ls_blocked", "ls_gain"]
+            "runtime_actual", "total_evaluations", "evals_per_sec",
+            "evals_to_95pct_gain", "time_to_95pct_gain", "evals_to_spga_median",
+            "test_fitness", "test_mean_profit", "test_mad", "generations", "ls_evals",
+            "evals", "ls_runs", "ls_steps", "ls_worse", "ls_aspiration", "ls_blocked", "ls_gain"]
     df[cols].to_csv(f"{OUT}/results.csv", index=False, float_format="%.4f")
 
-    # lịch sử hội tụ
+    # lịch sử hội tụ theo số lần evaluate
     hrows = []
     for alg, hs in all_hist.items():
         for s, h in hs.items():
@@ -225,15 +267,26 @@ def main(quick=False):
     pd.DataFrame(hrows, columns=["algorithm", "seed", "evals", "best_fitness"]).to_csv(
         f"{OUT}/history.csv", index=False, float_format="%.2f")
 
+    # lịch sử hội tụ theo thời gian thực
+    throws = []
+    for alg, ths in all_time_hist.items():
+        for s, th in ths.items():
+            throws += [(alg, s, *row) for row in th]
+    pd.DataFrame(throws, columns=["algorithm", "seed", "elapsed_s", "evals",
+                                  "best_z", "mean_profit", "mad"]).to_csv(
+        f"{OUT}/history_time.csv", index=False, float_format="%.4f")
+
     # tổng hợp
-    metrics = ["fitness", "mean_profit", "mad", "runtime_s", "evals_to_95pct_gain",
-               "evals_to_spga_median", "test_fitness", "ls_steps", "ls_worse", "ls_aspiration",
-               "ls_blocked"]
+    metrics = ["fitness", "mean_profit", "mad", "runtime_s", "runtime_actual",
+               "total_evaluations", "evals_per_sec", "evals_to_95pct_gain",
+               "time_to_95pct_gain", "evals_to_spga_median", "test_fitness",
+               "ls_steps", "ls_worse", "ls_aspiration", "ls_blocked"]
     summary = df.groupby("algorithm", sort=False)[metrics].agg(["mean", "std", "min", "max"])
     summary.to_csv(f"{OUT}/summary.csv", float_format="%.2f")
 
     write_stats(df)
     plot_main(df, all_hist)
+    plot_time(all_time_hist)
 
     # ---------------------------------------------------- danh mục máy nghiệm tốt nhất
     best = df.loc[df.fitness.idxmax()]
@@ -265,4 +318,9 @@ def main(quick=False):
 if __name__ == "__main__":
     ap = argparse.ArgumentParser()
     ap.add_argument("--quick", action="store_true")
-    main(ap.parse_args().quick)
+    ap.add_argument("--stopping", choices=["evaluations", "time"], default="evaluations",
+                    help="Điều kiện dừng: theo ngân sách đánh giá (mặc định) hoặc theo thời gian thực")
+    ap.add_argument("--time-limit", type=float, default=ga.TIME_LIMIT_SEC,
+                    help="Giới hạn thời gian thực (giây) khi --stopping time")
+    a = ap.parse_args()
+    main(quick=a.quick, stopping=a.stopping, time_limit=a.time_limit)

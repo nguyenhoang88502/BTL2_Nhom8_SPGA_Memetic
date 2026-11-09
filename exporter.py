@@ -41,6 +41,22 @@ def _cohens_d(a, b):
     return float(diff.mean() / sd) if sd > 0 else 0.0
 
 
+def _time_to_target(time_histories, target):
+    """Thời gian trung bình (giây) để chạm `target` trên các lần chạy; NaN nếu không chạm.
+
+    time_histories: list các lịch sử hội tụ [(elapsed_s, evals, best_z, mean, mad)].
+    target: ngưỡng fitness cần đạt (VD 0.95 hoặc 0.98 lần cận tối ưu MILP)."""
+    times = []
+    for th in time_histories:
+        t = float("nan")
+        for row in th:
+            if row[2] >= target:
+                t = row[0]
+                break
+        times.append(t)
+    return float(np.nanmean(times)) if times else float("nan")
+
+
 def compute_benchmark_stats(benchmark):
     """Thống kê so sánh từ kết quả benchmark (dict fitness theo thuật toán).
 
@@ -70,6 +86,13 @@ def compute_benchmark_stats(benchmark):
             fa = np.array(F[a], dtype=float)
             per[a]["win_rate"] = float((fa > fb).sum()) / len(fa) if len(fa) else 0.0
             per[a]["improvement_pct"] = (fa.mean() / fb.mean() - 1) * 100 if fb.mean() != 0 else 0.0
+    for a in algs:                                  # chỉ số hiệu năng thời gian (nếu có)
+        if a in benchmark.get("runtime", {}):
+            per[a]["runtime_mean"] = float(np.mean(benchmark["runtime"][a]))
+        if a in benchmark.get("total_evaluations", {}):
+            per[a]["total_evaluations_mean"] = float(np.mean(benchmark["total_evaluations"][a]))
+        if a in benchmark.get("evals_per_sec", {}):
+            per[a]["evals_per_sec_mean"] = float(np.mean(benchmark["evals_per_sec"][a]))
 
     friedman = None
     if len(algs) >= 3 and all(len(F[a]) >= 2 for a in algs):
@@ -289,6 +312,12 @@ def export_single_tab_report(benchmark, sensitivity, hypothesis_info, path, milp
     params = benchmark.get("params", {})
     hypothesis_info = hypothesis_info or {}
     conclusion = generate_hypothesis_conclusion(stats, hypothesis_info)
+    if milp and benchmark.get("time_history"):
+        z_opt = float(milp.get("z_opt", 0.0))
+        for a in algs:
+            ths = benchmark["time_history"].get(a, [])
+            stats["per_alg"][a]["time_to_target_95"] = _time_to_target(ths, 0.95 * z_opt)
+            stats["per_alg"][a]["time_to_target_98"] = _time_to_target(ths, 0.98 * z_opt)
 
     HEADER_FILL = PatternFill("solid", fgColor="1F3A93")
     HEADER_FONT = Font(color="FFFFFF", bold=True)
@@ -363,6 +392,15 @@ def export_single_tab_report(benchmark, sensitivity, hypothesis_info, path, milp
     add_row("Trung vị (triệu)", lambda a: stats["per_alg"][a]["median"] / 1e6)
     add_row("Nhỏ nhất (triệu)", lambda a: stats["per_alg"][a]["min"] / 1e6)
     add_row("Lớn nhất (triệu)", lambda a: stats["per_alg"][a]["max"] / 1e6)
+    if any("runtime_mean" in stats["per_alg"][a] for a in algs):
+        add_row("Thời gian chạy TB (giây)", lambda a: stats["per_alg"][a].get("runtime_mean"), "0.00")
+    if any("total_evaluations_mean" in stats["per_alg"][a] for a in algs):
+        add_row("Số lần đánh giá TB", lambda a: stats["per_alg"][a].get("total_evaluations_mean"), "#,##0")
+    if any("evals_per_sec_mean" in stats["per_alg"][a] for a in algs):
+        add_row("Tốc độ (đánh giá/giây)", lambda a: stats["per_alg"][a].get("evals_per_sec_mean"), "#,##0.0")
+    if milp and any("time_to_target_95" in stats["per_alg"][a] for a in algs):
+        add_row("Thời gian chạm 95% MILP (giây)", lambda a: stats["per_alg"][a].get("time_to_target_95"), "0.00")
+        add_row("Thời gian chạm 98% MILP (giây)", lambda a: stats["per_alg"][a].get("time_to_target_98"), "0.00")
     add_row("Win-rate so với gốc", lambda a: stats["per_alg"][a]["win_rate"], PCT)
     if stats["friedman"]:
         add_kv("Friedman p-value", stats["friedman"]["p"], "0.0000")
@@ -393,7 +431,7 @@ def export_single_tab_report(benchmark, sensitivity, hypothesis_info, path, milp
 
     ws.cell(row=r, column=1, value="Dữ liệu chi tiết N lần lặp").font = Font(bold=True, color="1F3A93")
     r += 1
-    hdr = ["Seed", "Thuật toán", "Z", "Lợi nhuận TB", "MAD", "Runtime (s)"]
+    hdr = ["Seed", "Thuật toán", "Z", "Lợi nhuận TB", "MAD", "Runtime (s)", "Số lần ĐG", "ĐG/giây"]
     for j, h in enumerate(hdr, 1):
         ws.cell(row=r, column=j, value=h)
     style_header(r, len(hdr))
@@ -404,12 +442,22 @@ def export_single_tab_report(benchmark, sensitivity, hypothesis_info, path, milp
             vals = [s, a, benchmark["fitness"][a][i],
                     benchmark.get("mean_profit", {}).get(a, [0] * len(seeds))[i],
                     benchmark.get("mad", {}).get(a, [0] * len(seeds))[i],
-                    benchmark.get("runtime", {}).get(a, [0] * len(seeds))[i]]
+                    benchmark.get("runtime", {}).get(a, [0] * len(seeds))[i],
+                    benchmark.get("total_evaluations", {}).get(a, [0] * len(seeds))[i],
+                    benchmark.get("evals_per_sec", {}).get(a, [0] * len(seeds))[i]]
             for j, v in enumerate(vals, 1):
                 c = ws.cell(row=r, column=j, value=v)
                 c.border = BORDER
-                if j >= 3:
-                    c.number_format = NUM if j == 3 else ("#,##0.00" if j < 6 else "0.00")
+                if j == 3:
+                    c.number_format = NUM
+                elif j in (4, 5):
+                    c.number_format = "#,##0.00"
+                elif j == 6:
+                    c.number_format = "0.00"
+                elif j == 7:
+                    c.number_format = "#,##0"
+                elif j == 8:
+                    c.number_format = "#,##0.0"
                 if r % 2 == 0:
                     c.fill = ZEBRA_FILL
             r += 1
@@ -447,7 +495,7 @@ def export_single_tab_report(benchmark, sensitivity, hypothesis_info, path, milp
         img2.width, img2.height = 980, 400
         ws.add_image(img2, f"A{r + 26}")
 
-    for j, w in enumerate([22, 16, 14, 14, 16, 12], 1):
+    for j, w in enumerate([22, 16, 14, 14, 16, 12, 12, 12], 1):
         ws.column_dimensions[get_column_letter(j)].width = w
 
     wb.save(path)

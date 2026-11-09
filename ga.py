@@ -53,7 +53,8 @@ PC = 0.9                 # xác suất lai ghép
 PM = 0.05                # xác suất đột biến mỗi gen
 TOURNAMENT = 2           # số cá thể tham gia mỗi lần chọn lọc tournament
 ELITE = 1                # số cá thể tốt nhất được giữ nguyên sang thế hệ sau
-BUDGET = 6000            # tổng số lần gọi evaluate cho 1 lần chạy (điều kiện dừng)
+BUDGET = 6000            # tổng số lần gọi evaluate cho 1 lần chạy (mode 'evaluations')
+TIME_LIMIT_SEC = 180.0   # giới hạn thời gian thực mỗi lần chạy, giây (mode 'time')
 # --- điểm kích hoạt tìm kiếm cục bộ (dùng chung cho GA-TS và GA-SA)
 LS_FREQ = 10             # cứ 10 thế hệ chạy tìm kiếm cục bộ 1 lần
 LS_TOP = 3               # chỉ mài 3 cá thể tốt nhất
@@ -72,31 +73,76 @@ SA_FINAL_RATIO = 0.01    # đến lần evaluate cuối của mỗi lần SA th�
 
 # ============================================================ BỘ ĐẾM ĐÁNH GIÁ
 class _Counter:
-    """Bọc hàm evaluate để đếm số lần gọi và ghi lịch sử best fitness.
+    """Bọc hàm evaluate để đếm số lần gọi, đo thời gian thực và ghi lịch sử best fitness.
 
-    Mọi lần tính Z (kể cả trong Tabu/SA và lúc ước lượng T0) đều đi qua đây,
-    nên ngân sách 6000 được kiểm soát ở MỘT chỗ duy nhất -> so sánh công bằng.
-    Đồng thời nó tự nhớ nghiệm tốt nhất từng gặp (best_x, best_f) và lịch sử hội tụ."""
+    Mọi lần tính Z (kể cả trong Tabu/SA và lúc ước lượng T0) đều đi qua đây, nên điều
+    kiện dừng được kiểm soát ở MỘT chỗ duy nhất -> so sánh công bằng giữa các thuật toán.
+    Hai chế độ dừng (stopping_criterion):
+      "evaluations": dừng khi đủ `budget` lần evaluate (mặc định, tương thích ngược).
+      "time"       : dừng khi `time.perf_counter() - start_time >= time_limit_sec`.
+    Đồng thời nó tự nhớ nghiệm tốt nhất từng gặp (best_x, best_f) và 2 loại lịch sử hội tụ:
+      history      : [(số lần evaluate, best_f)]                     -> vẽ theo trục đánh giá
+      time_history : [(giây, số lần evaluate, best_f, mean, mad)]     -> vẽ theo trục thời gian
+    """
 
-    def __init__(self, evaluate, budget):
+    def __init__(self, evaluate, budget, time_limit_sec=None, stopping_criterion="evaluations"):
         self.evaluate = evaluate     # hàm gốc: x -> (fitness, mean, mad)
-        self.budget = budget         # tổng số lần được phép gọi
+        self.budget = budget         # tổng số lần được phép gọi (chỉ áp cho mode 'evaluations')
+        self.time_limit_sec = time_limit_sec
+        self.stopping_criterion = stopping_criterion   # "evaluations" | "time"
+        self.start_time = time.perf_counter()
         self.n = 0                   # số lần đã gọi
         self.best_f = -np.inf        # Z tốt nhất từ đầu lần chạy
         self.best_x = None           # nghiệm tương ứng
-        self.history = []            # [(n, best_f)] để vẽ đường hội tụ
+        self.history = []            # [(n, best_f)] để vẽ đường hội tụ theo đánh giá
+        self.time_history = []       # [(elapsed_s, n, best_f, mean, mad)] theo thời gian thực
+
+    def elapsed(self):
+        """Thời gian thực đã trôi qua (giây) kể từ lúc tạo bộ đếm."""
+        return time.perf_counter() - self.start_time
+
+    def time_left(self):
+        """Thời gian còn lại (giây), hoặc None nếu không giới hạn thời gian."""
+        if self.time_limit_sec is None:
+            return None
+        return self.time_limit_sec - self.elapsed()
 
     def left(self):
-        """Số lần evaluate còn lại."""
+        """Số lần evaluate còn lại theo ngân sách (mode 'evaluations')."""
         return self.budget - self.n
 
+    def available(self):
+        """Số lần evaluate có thể thực hiện thêm trước khi dừng (vô hạn nếu mode thời gian)."""
+        if self.stopping_criterion == "time" and self.time_limit_sec is not None:
+            return float("inf")
+        return self.budget - self.n
+
+    def should_stop(self):
+        """True khi đã đạt điều kiện dừng (hết ngân sách đánh giá HOẶC hết giờ)."""
+        if self.stopping_criterion == "time" and self.time_limit_sec is not None:
+            return self.elapsed() >= self.time_limit_sec
+        return self.n >= self.budget
+
     def __call__(self, x):
-        f = self.evaluate(x)[0]      # chỉ lấy fitness Z
+        f, mean, mad = self.evaluate(x)
         self.n += 1
         if f > self.best_f:          # cập nhật kỷ lục
             self.best_f, self.best_x = f, x.copy()
+            self.time_history.append((self.elapsed(), self.n, f, mean, mad))
         self.history.append((self.n, self.best_f))
         return f
+
+
+def time_history_to_df(time_history):
+    """Chuyển lịch sử hội tụ theo thời gian thực thành pandas.DataFrame.
+
+    time_history: list tuple (elapsed_s, evaluations, best_z, mean_profit, mad)
+    -> DataFrame cột: elapsed_s, evaluations, best_z, mean_profit, mad.
+    pandas được import trong hàm để ga.py vẫn chạy được khi thiếu pandas."""
+    import pandas as pd
+    return pd.DataFrame(
+        [list(row) for row in time_history],
+        columns=["elapsed_s", "evaluations", "best_z", "mean_profit", "mad"])
 
 
 # ============================================================ TOÁN TỬ GA
@@ -261,11 +307,11 @@ def local_search(x, fx, f_eval, rng, max_evals=LS_MAX_EVALS, moves=None, trace=N
     moves = MOVES if moves is None else moves
     used = 0
     improved = True
-    while improved and used < max_evals and f_eval.left() > 0:
+    while improved and used < max_evals and not f_eval.should_stop():
         improved = False
         d = mdl.decode(x)
         for i in rng.permutation(len(moves)):
-            if used >= max_evals or f_eval.left() <= 0:
+            if used >= max_evals or f_eval.should_stop():
                 break
             nd = apply_move(d, moves[i])
             if nd is None:
@@ -339,12 +385,12 @@ def tabu_search(x, fx, f_eval, rng, max_evals=LS_MAX_EVALS, moves=None, tabu=Non
     tabu = TabuList() if tabu is None else tabu
     best_x, best_f = x, fx                      # nghiệm tốt nhất trong lần tìm kiếm này
     used = 0                                    # số lần evaluate đã dùng
-    while used < max_evals and f_eval.left() > 0:
+    while used < max_evals and not f_eval.should_stop():
         tabu.tick()
         d = mdl.decode(x)                       # giải mã nghiệm hiện tại để áp bước
         chosen = None
         for _ in range(1 + TS_REDRAWS):         # bốc lần đầu + tối đa 3 lần bốc lại
-            n = min(n_cand, max_evals - used, f_eval.left())   # không vượt ngân sách
+            n = min(n_cand, max_evals - used, f_eval.available())   # không vượt ngân sách
             if n <= 0:
                 break
             cands = _sample_valid(d, moves, rng, n)
@@ -363,6 +409,8 @@ def tabu_search(x, fx, f_eval, rng, max_evals=LS_MAX_EVALS, moves=None, tabu=Non
                     allowed.append((fy, move, y, True))
                 elif trace is not None:         # bị cấm và không đủ tốt -> ghi lại để log
                     trace.append(_step("blocked", move, fx, fy))
+                if f_eval.should_stop():        # hết giờ giữa chừng -> dừng ngay, giữ best
+                    break
             if allowed:
                 chosen = max(allowed, key=lambda c: c[0])   # best-of-candidates, kể cả khi tệ hơn x
                 break
@@ -392,7 +440,9 @@ def estimate_t0(pop, fit, f_eval, rng, moves=None, p0=SA_P0, samples=SA_T0_SAMPL
     nên không phải chỉnh tay. 30 lần evaluate ở đây được f_eval đếm, nên tính vào ngân sách 6000."""
     moves = MOVES if moves is None else moves
     deltas = []
-    for _ in range(min(samples, f_eval.left())):
+    for _ in range(min(samples, f_eval.available())):
+        if f_eval.should_stop():                # hết giờ -> dừng ước lượng sớm, dùng T0 mặc định
+            break
         i = rng.integers(len(pop))
         cands = _sample_valid(mdl.decode(pop[i]), moves, rng, 1)
         if not cands:
@@ -424,7 +474,7 @@ def simulated_annealing(x, fx, f_eval, rng, max_evals=LS_MAX_EVALS, moves=None, 
     alpha = SA_FINAL_RATIO ** (1 / max_evals)   # hệ số làm nguội
     best_x, best_f = x, fx
     used = 0
-    while used < max_evals and f_eval.left() > 0:
+    while used < max_evals and not f_eval.should_stop():
         cands = _sample_valid(mdl.decode(x), moves, rng, 1)   # 1 bước hợp lệ ngẫu nhiên
         if not cands:
             break
@@ -459,6 +509,7 @@ def _ls_event(i, rank, f_before, f_after, used, trace, **extra):
 
 # ============================================================ VÒNG LẶP CHÍNH
 def run_ga_iter(evaluate, ls_method="none", seed=0, budget=BUDGET,
+                time_limit_sec=None, stopping_criterion="evaluations",
                 ls_freq=LS_FREQ, ls_top=LS_TOP, ls_max_evals=LS_MAX_EVALS,
                 pop_size=POP_SIZE, pc=PC, pm=PM, tour=TOURNAMENT, elite=ELITE,
                 ls_shift=LS_SHIFT, lamarck=True,
@@ -478,7 +529,9 @@ def run_ga_iter(evaluate, ls_method="none", seed=0, budget=BUDGET,
     if ls_method not in LS_METHODS:
         raise ValueError(f"ls_method phải thuộc {LS_METHODS}")
     rng = np.random.default_rng(seed)            # cùng seed -> cùng kết quả (tái lập được)
-    f_eval = _Counter(evaluate, budget)          # mọi lần tính Z đều qua bộ đếm này
+    # mọi lần tính Z đều qua bộ đếm này; nó đồng thời là đồng hồ đo thời gian thực và
+    # chốt điều kiện dừng (hết ngân sách đánh giá HOẶC hết giờ tùy stopping_criterion)
+    f_eval = _Counter(evaluate, budget, time_limit_sec, stopping_criterion)
     repair = mdl.repair if repair_fn is None else repair_fn
     ng = mdl.N_GENES if n_genes is None else int(n_genes)
     # nếu đổi % chuyển sản lượng thì tạo lại danh sách bước với tỉ lệ mới
@@ -494,16 +547,18 @@ def run_ga_iter(evaluate, ls_method="none", seed=0, budget=BUDGET,
     gen = 0
     ls_calls = 0                                 # tổng số lần evaluate dùng cho tìm kiếm cục bộ
     yield dict(gen=0, pop=pop, fit=fit, evals=f_eval.n, best_x=f_eval.best_x, best_f=f_eval.best_f,
-               history=f_eval.history, ls_events=[], ls_calls=0, runtime=time.perf_counter() - t0, done=False)
+               history=f_eval.history, time_history=f_eval.time_history,
+               ls_events=[], ls_calls=0, runtime=time.perf_counter() - t0, done=False)
 
-    while f_eval.left() > 0:                     # ---- dừng khi hết 6000 lần evaluate
+    done = False
+    while not done:                              # ---- dừng khi hết ngân sách đánh giá hoặc hết giờ
         gen += 1
         # ---- (2) Elitism: giữ nguyên cá thể tốt nhất sang thế hệ mới
         order = np.argsort(-fit)
         new_pop = [pop[i].copy() for i in order[:elite]]
         new_fit = [fit[i] for i in order[:elite]]
         # ---- (3) Sinh con cho đến khi đủ quần thể
-        while len(new_pop) < pop_size and f_eval.left() > 0:
+        while len(new_pop) < pop_size and not f_eval.should_stop():
             p1 = pop[tournament(fit, rng, tour)]                 # chọn lọc
             p2 = pop[tournament(fit, rng, tour)]
             if rng.random() < pc:                                # lai ghép với xác suất pc
@@ -511,7 +566,7 @@ def run_ga_iter(evaluate, ls_method="none", seed=0, budget=BUDGET,
             else:
                 c1, c2 = p1.copy(), p2.copy()
             for c in (c1, c2):
-                if len(new_pop) >= pop_size or f_eval.left() <= 0:
+                if len(new_pop) >= pop_size or f_eval.should_stop():
                     break
                 c = repair(mutate(c, rng, pm))                   # đột biến + sửa khả thi
                 new_pop.append(c)
@@ -523,7 +578,7 @@ def run_ga_iter(evaluate, ls_method="none", seed=0, budget=BUDGET,
         if ls_method != "none" and gen % ls_freq == 0:
             tabu = TabuList(ts_tenure)                   # reset ở đầu mỗi lần kích hoạt
             for rank, i in enumerate(np.argsort(-fit)[:ls_top]):
-                if f_eval.left() <= 0:
+                if f_eval.should_stop():
                     break
                 trace = []
                 f_before = fit[i]
@@ -544,22 +599,28 @@ def run_ga_iter(evaluate, ls_method="none", seed=0, budget=BUDGET,
                     pop[i], fit[i] = y, fy           # Lamarckian: ghi nghiệm tốt nhất gặp được
                 else:
                     fit[i] = fy                      # Baldwinian: chỉ cập nhật fitness
+        done = f_eval.should_stop()
         yield dict(gen=gen, pop=pop, fit=fit, evals=f_eval.n, best_x=f_eval.best_x, best_f=f_eval.best_f,
-                   history=f_eval.history, ls_events=events, ls_calls=ls_calls,
-                   runtime=time.perf_counter() - t0, done=f_eval.left() <= 0)
+                   history=f_eval.history, time_history=f_eval.time_history,
+                   ls_events=events, ls_calls=ls_calls,
+                   runtime=time.perf_counter() - t0, done=done)
 
 
-def run_ga(evaluate, ls_method="none", seed=0, budget=BUDGET, **kw):
+def run_ga(evaluate, ls_method="none", seed=0, budget=BUDGET,
+           time_limit_sec=None, stopping_criterion="evaluations", **kw):
     """Chạy trọn 1 lần GA (không cần xem từng thế hệ), dùng trong main.py và tests.py.
 
     evaluate(x) -> (fitness, mean_profit, mad) (đã gắn sẵn bộ kịch bản).
     ls_method: "none" SPGA gốc, "tabu" GA-TS, "sa" GA-SA, "hc" hill climbing (ablation).
-    Tham số khác (ls_freq, ts_n_cand, ...) truyền thẳng cho run_ga_iter.
-    Sau khi chạy, run_ga.last_info chứa thống kê tổng: số thế hệ, số lần evaluate cho tìm kiếm
-    cục bộ, tổng số bước đã đi / bước tệ hơn / aspiration / bị cấm, tổng mức Z tăng nhờ tìm kiếm cục bộ."""
+    Điều kiện dừng: stopping_criterion="evaluations" (dùng budget, mặc định) hoặc "time"
+    (dùng time_limit_sec). Tham số khác (ls_freq, ts_n_cand, ...) truyền thẳng cho run_ga_iter.
+    Sau khi chạy, run_ga.last_info chứa thống kê tổng: số thế hệ, số lần evaluate cho tìm
+    kiếm cục bộ, tổng số bước đã đi / bước tệ hơn / aspiration / bị cấm, tổng mức Z tăng
+    nhờ tìm kiếm cục bộ, cùng chỉ số hiệu năng thời gian (runtime_actual, total_evaluations,
+    evals_per_sec, time_history)."""
     st = None
     totals = dict(ls_runs=0, ls_steps=0, ls_worse=0, ls_aspiration=0, ls_blocked=0, ls_gain=0.0)
-    for st in run_ga_iter(evaluate, ls_method, seed, budget, **kw):
+    for st in run_ga_iter(evaluate, ls_method, seed, budget, time_limit_sec, stopping_criterion, **kw):
         for e in st["ls_events"]:                # cộng dồn thống kê tìm kiếm cục bộ
             totals["ls_runs"] += 1
             totals["ls_steps"] += e["n_steps"]
@@ -567,5 +628,10 @@ def run_ga(evaluate, ls_method="none", seed=0, budget=BUDGET, **kw):
             totals["ls_aspiration"] += e["n_aspiration"]
             totals["ls_blocked"] += e["n_blocked"]
             totals["ls_gain"] += e["gain"]
-    run_ga.last_info = {"generations": st["gen"], "ls_evals": st["ls_calls"], "evals": st["evals"], **totals}
-    return st["best_x"], st["history"], st["runtime"]
+    rt = st["runtime"]
+    run_ga.last_info = {
+        "generations": st["gen"], "ls_evals": st["ls_calls"], "evals": st["evals"],
+        "runtime_actual": rt, "total_evaluations": st["evals"],
+        "evals_per_sec": st["evals"] / rt if rt > 0 else 0.0,
+        "time_history": st["time_history"], **totals}
+    return st["best_x"], st["history"], rt

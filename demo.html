@@ -248,6 +248,15 @@ dialog ul { margin: 2px 0; padding-left: 16px; }
         <option value="600"></option><option value="2000"></option><option value="6000"></option><option value="12000"></option>
       </datalist>
     </label>
+    <label title="Chọn cách dừng thuật toán">Dừng theo:
+      <select name="stopping">
+        <option value="evaluations">Số lần đánh giá</option>
+        <option value="time">Thời gian</option>
+      </select>
+    </label>
+    <label title="Giới hạn thời gian thực mỗi lần chạy (giây), dùng khi chọn 'Dừng theo: Thời gian'">Giới hạn (giây):
+      <input name="time_limit_sec" type="number" min="1" step="1" style="width:55px">
+    </label>
     <label title="Mức ngại rủi ro, từ 0 đến 1">k: <input name="k" type="number" step="0.1" min="0" max="1" style="width:40px"></label>
     <label title="Độ lệch nhu cầu">σ: <input name="sigma" type="number" step="1000" min="0" style="width:55px"></label>
     <button type="button" id="openLs">Tham số LS</button>
@@ -331,6 +340,15 @@ dialog ul { margin: 2px 0; padding-left: 16px; }
     <datalist id="budgetList2">
       <option value="600"></option><option value="2000"></option><option value="6000"></option><option value="12000"></option>
     </datalist>
+    <label title="Chọn cách dừng thuật toán">Dừng theo:
+      <select name="stopping">
+        <option value="evaluations" selected>Số lần đánh giá</option>
+        <option value="time">Thời gian</option>
+      </select>
+    </label>
+    <label title="Giới hạn thời gian thực mỗi lần chạy (giây), dùng khi chọn 'Dừng theo: Thời gian'">Giới hạn (giây):
+      <input name="time_limit_sec" type="number" min="1" step="1" value="180" style="width:55px">
+    </label>
     <label>k: <input name="k" type="number" value="0.5" step="0.1" min="0" max="1" style="width:40px"></label>
     <label>σ: <input name="sigma" type="number" value="7000" min="0" style="width:55px"></label>
     <label>α: <select name="alpha"><option value="0.05">0.05</option><option value="0.01">0.01</option></select></label>
@@ -478,7 +496,7 @@ const NAME = {spga:"SPGA", ts:"GA-TS", sa:"GA-SA", ml:"GA-LP"};
 const ALGOS = ["spga","ts","sa","ml"];
 const LABEL = {spga:"SPGA gốc", ts:"GA-TS", sa:"GA-SA", ml:"Matheuristics (GA-LP)"};
 const CODE = {"SPGA gốc":"spga", "GA-TS":"ts", "GA-SA":"sa", "Matheuristics (GA-LP)":"ml"};
-const PARAMS = ["mode","seed","budget","k","sigma","ls_freq","ls_top","ls_max","ts_n_cand","ts_tenure","sa_p0"];
+const PARAMS = ["mode","seed","budget","stopping","time_limit_sec","k","sigma","ls_freq","ls_top","ls_max","ts_n_cand","ts_tenure","sa_p0"];
 const $ = s => document.querySelector(s);
 const fmt = (v, d=2) => (v==null||!isFinite(v)) ? "–" : v.toLocaleString("vi-VN",{minimumFractionDigits:d,maximumFractionDigits:d});
 const signed = (v, d=2) => (v==null||!isFinite(v)) ? "–" : (v>=0?"+":"") + fmt(v,d);
@@ -551,7 +569,7 @@ function drawLines(g,w,h, series, xMax, xDec, opts={}){
 }
 
 // ------------------------------------------------------------- state + charts (Tab 1)
-let S = null, es = null, defaults = {}, budget = 6000, RES = null;
+let S = null, es = null, defaults = {}, budget = 6000, stopping = "evaluations", timeLimit = 180, RES = null;
 const freshAlgo = () => ({hist:[], plan:null, lsMarks:[], done:null, best:null, evals:0, gen:0, steps:0, worse:0, aspiration:0, blocked:0});
 
 function drawConv(){
@@ -627,8 +645,12 @@ function updateScores(){
   for (const a of ALGOS){
     const st = S.a[a], on = S.algos.includes(a);
     $("#z_"+a).textContent = on && st.best!=null ? fmt(st.best)+" tr" : "–";
-    $("#sub_"+a).textContent = !on ? "Không chạy" : st.done ? `Xong · ${st.gen} thế hệ · ${fmt(st.done.runtime,1)} giây` : `Thế hệ ${st.gen} · ${st.evals}/${budget} lần đánh giá`;
-    $("#bar_"+a).style.width = on ? Math.min(100,100*st.evals/budget)+"%" : "0%";
+    const runningTxt = stopping === "time"
+      ? `Thế hệ ${st.gen} · ${fmt(st.runtime ?? 0, 1)}/${fmt(timeLimit, 1)} giây`
+      : `Thế hệ ${st.gen} · ${st.evals}/${budget} lần đánh giá`;
+    $("#sub_"+a).textContent = !on ? "Không chạy" : st.done ? `Xong · ${st.gen} thế hệ · ${fmt(st.done.runtime,1)} giây` : runningTxt;
+    const prog = stopping === "time" ? (st.runtime ?? 0) / timeLimit : st.evals / budget;
+    $("#bar_"+a).style.width = on ? Math.min(100,100*prog)+"%" : "0%";
   }
   for (const a of ["ts","sa","ml"]){
     const el = $("#d_"+a); el.textContent = "";
@@ -698,6 +720,8 @@ function start(){
   const q = new URLSearchParams(defaults);
   for (const k of PARAMS) if (form.elements[k].value!=="") q.set(k, form.elements[k].value);
   budget = +q.get("budget");
+  stopping = q.get("stopping") || "evaluations";
+  timeLimit = +q.get("time_limit_sec") || 180;
   $("#convTitle").textContent = "Hội tụ của lần chạy này";
   $("#convHint").textContent = "Đường càng cao càng tốt. Đường nét đứt xám là cận tối ưu toàn cục MILP.";
   $("#feed").innerHTML = '<li class="hint" style="padding:4px">Đang chờ lần tìm kiếm cục bộ đầu tiên…</li>';
@@ -709,7 +733,7 @@ function start(){
   es.addEventListener("start", e => { S.algos = JSON.parse(e.data).algos; updateScores(); renderTable(); redraw(); });
   es.addEventListener("gen", e => {
     const d = JSON.parse(e.data), st = S.a[d.algo];
-    st.gen=d.gen; st.evals=d.evals; st.best=d.best;
+    st.gen=d.gen; st.evals=d.evals; st.best=d.best; st.runtime=d.runtime;
     const last = st.hist[st.hist.length-1];
     if (!last || last[1]!==d.best || d.evals-last[0]>budget/100) st.hist.push([d.evals,d.best]);
     if (d.plan) st.plan = d.plan;
@@ -918,12 +942,14 @@ function renderBenchStats(){
 function startBenchmark(){
   if (esBench){ stopBench(); return; }   // bấm lần 2 = dừng
   const q = new URLSearchParams();
-  for (const k of ["n_runs","budget","k","sigma","alpha"]){
+  for (const k of ["n_runs","budget","stopping","time_limit_sec","k","sigma","alpha"]){
     if (benchForm.elements[k] && benchForm.elements[k].value!=="") q.set(k, benchForm.elements[k].value);
   }
   q.set("h0", document.getElementById("h0_input").value || "");
   q.set("h1", document.getElementById("h1_input").value || "");
   bench = { algos:[], n_runs:+benchForm.elements["n_runs"].value||10, budget:+benchForm.elements["budget"].value||6000,
+            stopping:benchForm.elements["stopping"]?.value||"evaluations",
+            time_limit_sec:+benchForm.elements["time_limit_sec"]?.value||180,
             current:{}, currentSeed:0, runs:{}, runOrder:[], selectedSeed:null, leaderboard:[], summary:null,
             conclusion:"", milp:null, params:{k:+benchForm.elements["k"].value||0.5, sigma:+benchForm.elements["sigma"].value||7000} };
   $("#benchStatus").textContent = "Đang kiểm định…"; $("#benchBar").style.width = "0%";
@@ -936,7 +962,9 @@ function startBenchmark(){
   esBench.addEventListener("start", e => {
     const d = JSON.parse(e.data);
     bench.algos = d.algorithms; bench.n_runs = d.n_runs; bench.budget = d.budget;
-    $("#benchStatus").textContent = `Chạy ${d.n_runs} seed × ${d.algorithms.length} thuật toán (budget ${d.budget})…`;
+    bench.stopping = d.stopping || "evaluations"; bench.time_limit_sec = d.time_limit_sec || 180;
+    const stopTxt = bench.stopping === "time" ? `${fmt(bench.time_limit_sec,1)} giây` : `budget ${bench.budget}`;
+    $("#benchStatus").textContent = `Chạy ${d.n_runs} seed × ${d.algorithms.length} thuật toán (dừng theo ${stopTxt})…`;
   });
   esBench.addEventListener("run_start", e => {
     const d = JSON.parse(e.data);
@@ -951,7 +979,8 @@ function startBenchmark(){
     const last = st.hist[st.hist.length-1];
     if (!last || last[1]!==d.best) st.hist.push([d.evals, d.best]);
     if (d.plan) st.plan = d.plan;
-    $("#benchBar").style.width = Math.min(100, 100*d.evals/bench.budget) + "%";
+    const bprog = bench.stopping === "time" ? (d.runtime ?? 0) / bench.time_limit_sec : d.evals / bench.budget;
+    $("#benchBar").style.width = Math.min(100, 100*bprog) + "%";
     redrawBench();
   });
   esBench.addEventListener("run_done", e => {
