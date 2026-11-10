@@ -58,6 +58,23 @@ LS_METHOD = {"spga": "none", "ts": "tabu", "sa": "sa", "ml": "none"}
 MODES = {"all": ("spga", "ts", "sa", "ml"), "spga": ("spga",), "ts": ("ts",),
          "sa": ("sa",), "ml": ("ml",)}
 FULL_LABEL = {"spga": "SPGA gốc", "ts": "GA-TS", "sa": "GA-SA", "ml": "Matheuristics (GA-LP)"}
+ALL_CODES = ("spga", "ts", "sa", "ml")
+
+
+def selected_algos(q):
+    """Đọc danh sách thuật toán từ checkbox (algos=spga,ts,sa) hoặc mode cũ."""
+    raw = q.get("algos", [""])[0].strip()
+    if raw:
+        seen, codes = set(), []
+        for c in raw.replace(";", ",").split(","):
+            c = c.strip()
+            if c in ALL_CODES and c not in seen:
+                seen.add(c)
+                codes.append(c)
+        if codes:
+            return tuple(codes)
+    mode = q.get("mode", ["all"])[0]
+    return MODES.get(mode, MODES["all"])
 
 
 def log(msg, col=None):
@@ -297,8 +314,7 @@ class Handler(BaseHTTPRequestHandler):
             kw["stopping_criterion"] = stopping
             kw["time_limit_sec"] = max(fnum(q, "time_limit_sec"), 1.0)
             seed = fnum(q, "seed", int)
-            mode = q.get("mode", ["all"])[0]
-            names = MODES.get(mode, MODES["all"])
+            names = selected_algos(q)
             delay = max(fnum(q, "delay"), 0) / 1000
 
             ev_ml = matheuristics.LpEvaluator(k=mdl.K_RISK, sigma=mdl.SIGMA, scenarios=scen) if "ml" in names else None
@@ -442,8 +458,7 @@ class Handler(BaseHTTPRequestHandler):
             mu = np.array([fnum(q, "mu1"), fnum(q, "mu2"), fnum(q, "mu3")])
             n_scen = max(fnum(q, "n_scen", int), 2)
             scen_seed = fnum(q, "scen_seed", int)
-            mode = q.get("mode", ["all"])[0]
-            codes = MODES.get(mode, MODES["all"])
+            codes = selected_algos(q)
             labels = [FULL_LABEL[c] for c in codes]
             seeds = list(range(1, n_runs + 1))
             base = FULL_LABEL["spga"] if "spga" in codes else labels[0]
@@ -606,8 +621,7 @@ class Handler(BaseHTTPRequestHandler):
             sens_runs = max(fnum(q, "sens_runs", int), 1)
             n_scen = max(fnum(q, "n_scen", int), 2)
             scen_seed = fnum(q, "scen_seed", int)
-            mode = q.get("mode", ["all"])[0]
-            codes = MODES.get(mode, MODES["all"])
+            codes = selected_algos(q)
             labels = [FULL_LABEL[c] for c in codes]
             mu = DEFAULT_MODEL["MU"].copy()
 

@@ -71,6 +71,9 @@ nav.tabs .tab.active {
   flex-shrink: 0;
 }
 .toolbar label { display: flex; align-items: center; gap: 3px; font-size: 11px; }
+.algos-pick { display: inline-flex; align-items: center; gap: 6px; font-size: 11px; }
+.algos-pick label { gap: 2px; }
+input[type="checkbox"] { height: auto; width: auto; margin: 0; vertical-align: middle; }
 
 input, select, button {
   font-family: Arial, sans-serif;
@@ -232,15 +235,13 @@ dialog ul { margin: 2px 0; padding-left: 16px; }
 <!-- ===================== TAB 1: CHẠY ĐƠN ===================== -->
 <section class="tabpanel active" id="tab-single">
   <form id="f" class="toolbar" novalidate>
-    <label>Chế độ:
-      <select name="mode">
-        <option value="all">Cả bốn</option>
-        <option value="spga">SPGA gốc</option>
-        <option value="ts">GA-TS</option>
-        <option value="sa">GA-SA</option>
-        <option value="ml">Matheuristics (GA-LP)</option>
-      </select>
-    </label>
+    <span class="algos-pick" title="Chọn thuật toán cần chạy (ít nhất 1)">
+      Thuật toán:
+      <label><input type="checkbox" name="algo" value="spga" checked>SPGA gốc</label>
+      <label><input type="checkbox" name="algo" value="ts" checked>GA-TS</label>
+      <label><input type="checkbox" name="algo" value="sa" checked>GA-SA</label>
+      <label><input type="checkbox" name="algo" value="ml" checked>GA-LP</label>
+    </span>
     <label>Seed: <input name="seed" type="number" style="width:45px"></label>
     <label title="Nhập số tùy ý hoặc chọn gợi ý">Số lần đánh giá:
       <input name="budget" list="budgetList" type="number" min="100" style="width:70px">
@@ -352,6 +353,13 @@ dialog ul { margin: 2px 0; padding-left: 16px; }
     <label>k: <input name="k" type="number" value="0.5" step="0.1" min="0" max="1" style="width:40px"></label>
     <label>σ: <input name="sigma" type="number" value="7000" min="0" style="width:55px"></label>
     <label>α: <select name="alpha"><option value="0.05">0.05</option><option value="0.01">0.01</option></select></label>
+    <span class="algos-pick" title="Chọn thuật toán cần chạy (ít nhất 1)">
+      Thuật toán:
+      <label><input type="checkbox" name="algo" value="spga" checked>SPGA gốc</label>
+      <label><input type="checkbox" name="algo" value="ts" checked>GA-TS</label>
+      <label><input type="checkbox" name="algo" value="sa" checked>GA-SA</label>
+      <label><input type="checkbox" name="algo" value="ml" checked>GA-LP</label>
+    </span>
     <button type="submit" class="primary" id="goBench">▶ Chạy Kiểm định</button>
     <button type="button" onclick="exportExcel()">📥 Xuất Excel</button>
   </form>
@@ -496,7 +504,7 @@ const NAME = {spga:"SPGA", ts:"GA-TS", sa:"GA-SA", ml:"GA-LP"};
 const ALGOS = ["spga","ts","sa","ml"];
 const LABEL = {spga:"SPGA gốc", ts:"GA-TS", sa:"GA-SA", ml:"Matheuristics (GA-LP)"};
 const CODE = {"SPGA gốc":"spga", "GA-TS":"ts", "GA-SA":"sa", "Matheuristics (GA-LP)":"ml"};
-const PARAMS = ["mode","seed","budget","stopping","time_limit_sec","k","sigma","ls_freq","ls_top","ls_max","ts_n_cand","ts_tenure","sa_p0"];
+const PARAMS = ["seed","budget","stopping","time_limit_sec","k","sigma","ls_freq","ls_top","ls_max","ts_n_cand","ts_tenure","sa_p0"];
 const $ = s => document.querySelector(s);
 const fmt = (v, d=2) => (v==null||!isFinite(v)) ? "–" : v.toLocaleString("vi-VN",{minimumFractionDigits:d,maximumFractionDigits:d});
 const signed = (v, d=2) => (v==null||!isFinite(v)) ? "–" : (v>=0?"+":"") + fmt(v,d);
@@ -711,14 +719,20 @@ function addFeed(d){
   while (box.children.length>40) box.lastChild.remove();
 }
 const form = $("#f");
+function checkedAlgos(formEl){
+  return [...formEl.querySelectorAll('input[name="algo"]:checked')].map(c=>c.value).join(",");
+}
 function running(on){
   $("#go").textContent = on ? "■ Dừng" : "▶ Chạy"; $("#go").classList.toggle("running",on);
   [...form.elements].filter(x=>x.name).forEach(x=>x.disabled=on);
 }
 function stop(){ if(es){ es.close(); es=null; } running(false); }
 function start(){
+  const algosSel = checkedAlgos(form);
+  if (!algosSel){ alert("Chọn ít nhất một thuật toán để chạy."); return; }
   const q = new URLSearchParams(defaults);
   for (const k of PARAMS) if (form.elements[k].value!=="") q.set(k, form.elements[k].value);
+  q.set("algos", algosSel);
   budget = +q.get("budget");
   stopping = q.get("stopping") || "evaluations";
   timeLimit = +q.get("time_limit_sec") || 180;
@@ -941,10 +955,13 @@ function renderBenchStats(){
 }
 function startBenchmark(){
   if (esBench){ stopBench(); return; }   // bấm lần 2 = dừng
+  const algosSel = checkedAlgos(benchForm);
+  if (!algosSel){ alert("Chọn ít nhất một thuật toán để chạy."); return; }
   const q = new URLSearchParams();
   for (const k of ["n_runs","budget","stopping","time_limit_sec","k","sigma","alpha"]){
     if (benchForm.elements[k] && benchForm.elements[k].value!=="") q.set(k, benchForm.elements[k].value);
   }
+  q.set("algos", algosSel);
   q.set("h0", document.getElementById("h0_input").value || "");
   q.set("h1", document.getElementById("h1_input").value || "");
   bench = { algos:[], n_runs:+benchForm.elements["n_runs"].value||10, budget:+benchForm.elements["budget"].value||6000,

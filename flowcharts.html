@@ -1,0 +1,416 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Flowchart 3 thuật toán — SPGA, GA-TS, GA-LP</title>
+<style>
+  :root{ --ink:#1a1a2e; --muted:#5a5a72; --line:#e3e3ee; }
+  *{ box-sizing:border-box; }
+  body{
+    margin:0; padding:36px 20px 90px;
+    font-family:"Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    color:var(--ink); background:#ffffff;
+  }
+  .wrap{ max-width:1120px; margin:0 auto; }
+  header{ text-align:center; margin-bottom:6px; }
+  header h1{ font-size:26px; margin:0 0 6px; letter-spacing:.3px; }
+  header p{ color:var(--muted); font-size:14px; margin:0 0 4px; }
+
+  .legend{
+    display:flex; flex-wrap:wrap; gap:14px; justify-content:center;
+    font-size:13px; color:#444; margin:14px 0 4px;
+  }
+  .legend span{ display:inline-flex; align-items:center; gap:6px; }
+  .sw{ width:16px; height:16px; border-radius:4px; border:1px solid rgba(0,0,0,.2); display:inline-block; }
+
+  .chart-card{
+    background:#fff; border:1px solid var(--line); border-radius:12px;
+    padding:22px 24px 18px; margin:30px 0;
+    box-shadow:0 1px 3px rgba(20,20,50,.05);
+    page-break-inside:avoid;
+  }
+  .card-head{ display:flex; align-items:flex-start; gap:16px; flex-wrap:wrap; }
+  .card-head .ttl{ flex:1 1 320px; min-width:0; }
+  .card-head h2{ font-size:20px; margin:0 0 4px; display:flex; align-items:center; gap:10px; }
+  .tag{ display:inline-block; font-size:12px; font-weight:600; padding:2px 10px;
+        border-radius:999px; color:#fff; letter-spacing:.3px; }
+  .tag.spga{ background:#1f3a93; } .tag.gats{ background:#e07b39; } .tag.galp{ background:#2e8b57; }
+  .sub{ color:var(--muted); font-size:13px; margin:0; }
+  .sub code{ background:#f4f4f8; padding:1px 6px; border-radius:5px; font-size:12px; color:#333; }
+
+  .save-btn{
+    flex:0 0 auto; align-self:center;
+    border:1px solid #1565c0; background:#fff; color:#1565c0;
+    font-size:13px; font-weight:600; padding:8px 14px; border-radius:8px;
+    cursor:pointer; transition:all .15s;
+  }
+  .save-btn:hover{ background:#1565c0; color:#fff; }
+  .save-btn:active{ transform:scale(.97); }
+
+  .diagram{ margin-top:16px; text-align:center; background:#fff; }
+  .diagram svg{ max-width:100%; height:auto; }
+  .err{ color:#c62828; font-size:13px; white-space:pre-wrap; text-align:left; }
+
+  .subchart{ margin-top:8px; border-top:1px dashed var(--line); padding-top:14px; }
+  .subchart h3{ font-size:15px; margin:0 0 2px; color:#333; font-weight:600; }
+  .subchart .sub{ color:var(--muted); font-size:12.5px; margin:0 0 10px; }
+  .foot{ text-align:center; font-size:12px; color:var(--muted); margin-top:10px;
+         border-top:1px dashed var(--line); padding-top:12px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Flowchart 3 thuật toán (Nhóm 8)</h1>
+    <p>SPGA gốc &middot; GA-TS (GA + Tabu Search) &middot; GA-LP (GA + Linear Programming)</p>
+  </header>
+
+  <div class="legend">
+    <span><i class="sw" style="background:#c8e6c9"></i>Bắt đầu</span>
+    <span><i class="sw" style="background:#e3f2fd"></i>Bước xử lý</span>
+    <span><i class="sw" style="background:#fff9c4"></i>Điều kiện</span>
+    <span><i class="sw" style="background:#ede7f6"></i>Chương trình con</span>
+    <span><i class="sw" style="background:#ffcdd2"></i>Kết thúc</span>
+  </div>
+
+  <!-- ============ SPGA ============ -->
+  <div class="chart-card">
+    <div class="card-head">
+      <div class="ttl">
+        <h2><span class="tag spga">1</span> SPGA gốc</h2>
+        <p class="sub">Khung GA thuần (Wang, Wang &amp; Chen 2008) &middot; <code>ga.run_ga(..., ls_method="none")</code> &middot; 135 gen &middot; 30 cá thể &middot; pc=0.9 &middot; pm=0.05 &middot; budget 6000</p>
+      </div>
+      <button class="save-btn" onclick="savePNG('d-spga','spga.png')">Lưu PNG</button>
+    </div>
+    <div class="diagram" id="d-spga"></div>
+  </div>
+
+  <!-- ============ GA-TS ============ -->
+  <div class="chart-card">
+    <div class="card-head">
+      <div class="ttl">
+        <h2><span class="tag gats">2</span> GA-TS (GA + Tabu Search)</h2>
+        <p class="sub">Khung GA như trên + tìm kiếm cục bộ: cứ 10 thế hệ mài 3 cá thể tốt nhất (&le; 20 lần evaluate mỗi cá) &middot; <code>ls_method="tabu"</code></p>
+      </div>
+      <button class="save-btn" onclick="savePNG('d-gats','ga_ts.png')">Lưu PNG</button>
+    </div>
+    <div class="diagram" id="d-gats"></div>
+
+    <div class="subchart">
+      <h3>Chi tiết khối “TABU SEARCH”</h3>
+      <p class="sub">5 bước ứng viên mỗi vòng &middot; tabu dùng chung cho 3 cá thể &middot; tenure = 7 &middot; aspiration khi phá kỷ lục toàn cục.</p>
+      <div class="diagram" id="d-tabu"></div>
+      <button class="save-btn" style="margin-top:8px" onclick="savePNG('d-tabu','tabu_search.png')">Lưu PNG</button>
+    </div>
+  </div>
+
+  <!-- ============ GA-LP ============ -->
+  <div class="chart-card">
+    <div class="card-head">
+      <div class="ttl">
+        <h2><span class="tag galp">3</span> GA-LP (GA + Linear Programming)</h2>
+        <p class="sub">GA trên không gian máy móc (63 gen, không có gen sản lượng) + LP phân bổ sản lượng tối ưu &middot; <code>matheuristics.run_matheur()</code></p>
+      </div>
+      <button class="save-btn" onclick="savePNG('d-galP','ga_lp.png')">Lưu PNG</button>
+    </div>
+    <div class="diagram" id="d-galP"></div>
+
+    <div class="subchart">
+      <h3>Chi tiết khối “ĐÁNH GIÁ (giải LP)”</h3>
+      <p class="sub">Mỗi lần evaluate = 1 lần giải LP (scipy.optimize.linprog, HiGHS) để tìm sản lượng Q* tối ưu cho phương án máy cố định.</p>
+      <div class="diagram" id="d-lp"></div>
+      <button class="save-btn" style="margin-top:8px" onclick="savePNG('d-lp','lp_evaluate.png')">Lưu PNG</button>
+    </div>
+  </div>
+
+  <p class="foot">Sơ đồ vẽ bằng Mermaid (tự dàn layout, không chồng đường). Nút <b>Lưu PNG</b> xuất ảnh nét 2x. Nếu cần chỉnh nhánh/màu, báo để sửa.</p>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10.9.1/dist/mermaid.min.js"></script>
+<script>
+window.savePNG = function(containerId, filename){
+  var el = document.getElementById(containerId);
+  var svg = el && el.querySelector('svg');
+  if(!svg){ alert('Sơ đồ chưa được vẽ.'); return; }
+  var clone = svg.cloneNode(true);
+  var vb = svg.viewBox && svg.viewBox.baseVal;
+  var w = (vb && vb.width) ? vb.width : (svg.getBoundingClientRect().width || 800);
+  var h = (vb && vb.height) ? vb.height : (svg.getBoundingClientRect().height || 600);
+  clone.setAttribute('xmlns','http://www.w3.org/2000/svg');
+  clone.setAttribute('xmlns:xlink','http://www.w3.org/1999/xlink');
+  clone.setAttribute('width', w);
+  clone.setAttribute('height', h);
+  clone.style.width = w + 'px';
+  clone.style.height = h + 'px';
+  clone.style.maxWidth = 'none';
+  var xml = new XMLSerializer().serializeToString(clone);
+  var blob = new Blob([xml], { type:'image/svg+xml;charset=utf-8' });
+  var url = URL.createObjectURL(blob);
+  var img = new Image();
+  var scale = 2;
+  img.onload = function(){
+    var canvas = document.createElement('canvas');
+    canvas.width = Math.round(w * scale);
+    canvas.height = Math.round(h * scale);
+    var ctx = canvas.getContext('2d');
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+    URL.revokeObjectURL(url);
+    var a = document.createElement('a');
+    a.href = canvas.toDataURL('image/png');
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  };
+  img.onerror = function(){ URL.revokeObjectURL(url); alert('Không thể xuất PNG.'); };
+  img.src = url;
+};
+
+(function(){
+  mermaid.initialize({
+    startOnLoad: false,
+    securityLevel: 'loose',
+    theme: 'base',
+    themeVariables: {
+      fontSize: '16px',
+      fontFamily: '"Segoe UI", Roboto, Arial, sans-serif',
+      lineColor: '#555555',
+      primaryColor: '#eef4ff',
+      primaryTextColor: '#0b3d91',
+      primaryBorderColor: '#2f6fd6'
+    },
+    flowchart: {
+      htmlLabels: false,
+      useMaxWidth: true,
+      curve: 'basis',
+      nodeSpacing: 26,
+      rankSpacing: 46,
+      padding: 12
+    }
+  });
+
+  var CLASSES = [
+    'classDef start fill:#c8e6c9,stroke:#2e7d32,stroke-width:2px,color:#1b5e20;',
+    'classDef fin fill:#ffcdd2,stroke:#c62828,stroke-width:2px,color:#b71c1c;',
+    'classDef op fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#0d47a1;',
+    'classDef cond fill:#fff9c4,stroke:#c7a600,stroke-width:2px,color:#6d5b00;',
+    'classDef sub fill:#ede7f6,stroke:#5e35b1,stroke-width:2px,color:#4527a0;'
+  ].join('\n');
+
+  var D = [
+    // ---------------- SPGA ----------------
+    {
+      id: 'd-spga',
+      code: [
+        'flowchart TD',
+        'A([Bắt đầu]):::start',
+        'B[Khởi tạo quần thể P<br/>30 cá thể x 135 gen ngẫu nhiên<br/>REPAIR + tính Z]:::op',
+        'C{Còn ngân sách<br/>evaluate?}:::cond',
+        'D[Thế hệ g = g + 1]:::op',
+        'E[Elitism: giữ 1 cá thể tốt nhất]:::op',
+        'F{Đủ 30 cá thể con?}:::cond',
+        'G[Chọn 2 cha mẹ<br/>TOURNAMENT k = 2]:::op',
+        'H{rand < pc = 0.9?}:::cond',
+        'I[LAI GHÉP HYBRID<br/>1 trong 4 kiểu]:::op',
+        'J[Giữ nguyên 2 cha mẹ]:::op',
+        'K[ĐỘT BIẾN pm = 0.05<br/>+ REPAIR + tính Z]:::op',
+        'L[Thêm con vào P mới]:::op',
+        'M[Cập nhật P = P mới]:::op',
+        'Z((Trả về x*)):::fin',
+        '',
+        'A --> B',
+        'B --> C',
+        'C -- Sai --> Z',
+        'C -- Đúng --> D',
+        'D --> E',
+        'E --> F',
+        'F -- Chưa đủ --> G',
+        'G --> H',
+        'H -- Có --> I',
+        'H -- Không --> J',
+        'I --> K',
+        'J --> K',
+        'K --> L',
+        'L --> F',
+        'F -- Đủ --> M',
+        'M --> C'
+      ].join('\n')
+    },
+    // ---------------- GA-TS ----------------
+    {
+      id: 'd-gats',
+      code: [
+        'flowchart TD',
+        'A([Bắt đầu]):::start',
+        'B[Khởi tạo quần thể P<br/>30 cá thể x 135 gen<br/>REPAIR + tính Z]:::op',
+        'C{Còn ngân sách?}:::cond',
+        'D[g = g + 1]:::op',
+        'E[Elitism]:::op',
+        'F{Đủ 30 cá thể con?}:::cond',
+        'G[TOURNAMENT k = 2]:::op',
+        'H{rand < pc = 0.9?}:::cond',
+        'I[LAI GHÉP HYBRID]:::op',
+        'J[Giữ nguyên cha mẹ]:::op',
+        'K[ĐỘT BIẾN + REPAIR + tính Z]:::op',
+        'L[Thêm con vào P mới]:::op',
+        'M[P = P mới]:::op',
+        'N{g chia hết cho 10?}:::cond',
+        'O[Tạo danh sách TABU chung<br/>tenure = 7]:::op',
+        'P{Đã mài đủ 3 cá thể<br/>tốt nhất?}:::cond',
+        'Q[[TABU SEARCH trên x_i<br/>tối đa 20 lần evaluate]]:::sub',
+        'R[Lamarckian: ghi nghiệm tốt nhất<br/>gặp được đè lên x_i]:::op',
+        'Z((Trả về x*)):::fin',
+        '',
+        'A --> B',
+        'B --> C',
+        'C -- Sai --> Z',
+        'C -- Đúng --> D',
+        'D --> E',
+        'E --> F',
+        'F -- Chưa đủ --> G',
+        'G --> H',
+        'H -- Có --> I',
+        'H -- Không --> J',
+        'I --> K',
+        'J --> K',
+        'K --> L',
+        'L --> F',
+        'F -- Đủ --> M',
+        'M --> N',
+        'N -- Không --> C',
+        'N -- Có --> O',
+        'O --> P',
+        'P -- Chưa --> Q',
+        'Q --> R',
+        'R --> P',
+        'P -- Đủ --> C'
+      ].join('\n')
+    },
+    // ---------------- Tabu Search (chi tiết) ----------------
+    {
+      id: 'd-tabu',
+      code: [
+        'flowchart TD',
+        'A([Tabu Search trên x]):::start',
+        'B[best = x<br/>số lần dùng = 0]:::op',
+        'C{dùng < 20 và<br/>còn ngân sách?}:::cond',
+        'D[Đồng hồ tabu + 1]:::op',
+        'E[Bốc 5 bước lân cận hợp lệ<br/>trong 174 bước, tính Z]:::op',
+        'F["allowed = bước không bị cấm<br/>+ bước bị cấm nhưng Z lớn hơn<br/>kỷ lục toàn cục (aspiration)"]:::op',
+        'G{Có bước được phép?}:::cond',
+        'H{Đã bốc lại 3 lần?}:::cond',
+        'I[Chọn bước có Z lớn nhất]:::op',
+        'J[Đi tới bước đã chọn<br/>kể cả khi Z giảm]:::op',
+        'K[Cấm bước ngược trong 7 vòng]:::op',
+        'L{"Z(x) > Z(best)?"}:::cond',
+        'M[best = x]:::op',
+        'Z((Trả về best)):::fin',
+        '',
+        'A --> B',
+        'B --> C',
+        'C -- Không --> Z',
+        'C -- Có --> D',
+        'D --> E',
+        'E --> F',
+        'F --> G',
+        'G -- Không --> H',
+        'H -- Chưa --> E',
+        'H -- Đủ --> Z',
+        'G -- Có --> I',
+        'I --> J',
+        'J --> K',
+        'K --> L',
+        'L -- Có --> M',
+        'M --> C',
+        'L -- Không --> C'
+      ].join('\n')
+    },
+    // ---------------- GA-LP ----------------
+    {
+      id: 'd-galP',
+      code: [
+        'flowchart TD',
+        'A([Bắt đầu]):::start',
+        'B[Khởi tạo quần thể P<br/>30 cá thể x 63 gen máy móc<br/>repair_ml + đánh giá LP]:::op',
+        'C{Còn ngân sách?}:::cond',
+        'D[g = g + 1]:::op',
+        'E[Elitism]:::op',
+        'F{Đủ 30 cá thể con?}:::cond',
+        'G[TOURNAMENT k = 2]:::op',
+        'H{rand < pc = 0.9?}:::cond',
+        'I[LAI GHÉP HYBRID]:::op',
+        'J[Giữ nguyên cha mẹ]:::op',
+        'K[ĐỘT BIẾN + repair_ml<br/>+ ĐÁNH GIÁ bằng giải LP]:::op',
+        'L[Thêm con vào P mới]:::op',
+        'M[P = P mới]:::op',
+        'Z((Trả về x*)):::fin',
+        '',
+        'A --> B',
+        'B --> C',
+        'C -- Sai --> Z',
+        'C -- Đúng --> D',
+        'D --> E',
+        'E --> F',
+        'F -- Chưa đủ --> G',
+        'G --> H',
+        'H -- Có --> I',
+        'H -- Không --> J',
+        'I --> K',
+        'J --> K',
+        'K --> L',
+        'L --> F',
+        'F -- Đủ --> M',
+        'M --> C'
+      ].join('\n')
+    },
+    // ---------------- LP evaluation (chi tiết) ----------------
+    {
+      id: 'd-lp',
+      code: [
+        'flowchart TD',
+        'A([Đánh giá phương án máy x]):::start',
+        'B[decode_ml: 63 gen<br/>thành K_m, K_a, X_m, X_a]:::op',
+        'C[Cập nhật vế phải ràng buộc<br/>năng lực = K + X]:::op',
+        'D["GIẢI LP bằng HiGHS:<br/>max (1-k) x lợi nhuận - k x MAD<br/>ràng buộc năng lực, tồn kho,<br/>bán MTO nhỏ hơn nhu cầu"]:::op',
+        'E{LP có nghiệm tối ưu?}:::cond',
+        'F[Trích Q* tối ưu]:::op',
+        'G[Làm sạch phương án:<br/>MTO sản xuất đúng mức bán]:::op',
+        'H[Tính lại fitness bằng<br/>scenario_profits]:::op',
+        'I[Fallback: Q = 0]:::op',
+        'Z((Trả về Z, mean, mad)):::fin',
+        '',
+        'A --> B',
+        'B --> C',
+        'C --> D',
+        'D --> E',
+        'E -- Có --> F',
+        'F --> G',
+        'G --> H',
+        'H --> Z',
+        'E -- Không --> I',
+        'I --> Z'
+      ].join('\n')
+    }
+  ];
+
+  (async function(){
+    for (var i = 0; i < D.length; i++){
+      var d = D[i];
+      var el = document.getElementById(d.id);
+      try {
+        var full = d.code.replace('flowchart TD', 'flowchart TD\n' + CLASSES);
+        var out = await mermaid.render(d.id + '-svg', full);
+        el.innerHTML = out.svg;
+      } catch(e){
+        el.innerHTML = '<pre class="err">Lỗi vẽ sơ đồ:\n' + (e && e.message ? e.message : e) + '</pre>';
+        console.error(d.id, e);
+      }
+    }
+  })();
+})();
+</script>
+</body>
+</html>
