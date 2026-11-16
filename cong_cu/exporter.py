@@ -17,9 +17,8 @@ import io
 
 import numpy as np
 
-ALG_ORDER = ["SPGA gốc", "GA-TS", "GA-SA", "Matheuristics (GA-LP)"]
-ALG_COLORS = {"SPGA gốc": "#1F3A93", "GA-TS": "#E07B39", "GA-SA": "#2E8B57",
-              "Matheuristics (GA-LP)": "#7B2FBE"}
+ALG_ORDER = ["SPGA gốc", "GA-TS", "GA-SA"]
+ALG_COLORS = {"SPGA gốc": "#1F3A93", "GA-TS": "#E07B39", "GA-SA": "#2E8B57"}
 
 
 # ============================================================ thống kê

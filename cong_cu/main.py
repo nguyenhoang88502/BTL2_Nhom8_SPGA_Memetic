@@ -1,11 +1,14 @@
 """
 main.py - chạy thực nghiệm so sánh SPGA gốc, GA-TS và GA-SA (Phần 4).
 
-    python main.py            # thí nghiệm chính + ablation
-    python main.py --quick    # chỉ thí nghiệm chính
-    python main.py --stopping time --time-limit 180   # dừng theo thời gian thực
+File này nằm trong thư mục cong_cu/ (công cụ chạy thí nghiệm, vẽ hình, demo). Nó dùng 3 file ở thư mục gốc:
+config.py (số liệu), model.py (bài toán), solver.py (thuật toán). Số kịch bản, danh sách seed... lấy từ config.py (phần C).
 
-Đầu ra (thư mục output/):
+    python cong_cu/main.py            # thí nghiệm chính + ablation
+    python cong_cu/main.py --quick    # chỉ thí nghiệm chính
+    python cong_cu/main.py --stopping time --time-limit 180   # dừng theo thời gian thực
+
+Đầu ra (thư mục output/ ở thư mục gốc, bất kể chạy lệnh từ đâu):
     results.csv            mỗi dòng = 1 lần chạy (thuật toán, seed, chỉ số)
     history.csv            fitness tốt nhất theo số lần gọi evaluate
     history_time.csv       fitness tốt nhất theo thời gian thực (elapsed_s, evals, best_z, mean, mad)
@@ -22,7 +25,17 @@ import argparse
 import functools
 import os
 import platform
+import sys
 import time
+
+# in tiếng Việt được cả khi console là cp1252 (không cần đặt PYTHONUTF8)
+for _stream in (sys.stdout, sys.stderr):
+    if hasattr(_stream, "reconfigure"):
+        _stream.reconfigure(encoding="utf-8")
+
+# thêm thư mục gốc (chứa config.py, model.py, solver.py) vào đường dẫn import
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, ROOT)
 
 import numpy as np
 import pandas as pd
@@ -32,15 +45,11 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 from scipy import stats
 
+import config as cfg
 import model as mdl
-import ga
+import solver
 
-N_SCEN = 30
-SCEN_SEED = 2026          # cùng 1 bộ kịch bản cho mọi lần chạy
-TEST_SCEN = 1000          # bộ kịch bản độc lập để kiểm tra ngoài mẫu
-TEST_SEED = 9999
-SEEDS = range(1, 11)
-OUT = "output"
+OUT = os.path.join(ROOT, "output")   # luôn là output/ ở thư mục gốc
 LABEL = {"none": "SPGA gốc", "tabu": "GA-TS", "sa": "GA-SA"}
 COLORS = {"SPGA gốc": "#1F3A93", "GA-TS": "#E07B39", "GA-SA": "#2E8B57"}
 BASE, TS, SA = LABEL["none"], LABEL["tabu"], LABEL["sa"]
@@ -65,8 +74,8 @@ def first_reach_time(thist, target):
 def run_set(evaluate, method, seeds, **kw):
     rows, hists = [], {}
     for s in seeds:
-        bx, hist, rt = ga.run_ga(evaluate, method, seed=s, **kw)
-        info = ga.run_ga.last_info
+        bx, hist, rt = solver.run_ga(evaluate, method, seed=s, **kw)
+        info = solver.run_ga.last_info
         f, mean, mad = evaluate(bx)
         rows.append({"seed": s, "best_x": bx, "fitness": f, "mean_profit": mean,
                      "mad": mad, "runtime_s": rt, **info})
@@ -105,7 +114,7 @@ def write_stats(df):
 
 def plot_main(df, all_hist):
     plt.rcParams.update({"font.family": "DejaVu Sans", "font.size": 10})
-    grid = np.arange(ga.POP_SIZE, ga.BUDGET + 1, 30)
+    grid = np.arange(cfg.POP_SIZE, cfg.BUDGET + 1, 30)
     fig, ax = plt.subplots(figsize=(7.5, 4.2), dpi=200)
     for alg, hs in all_hist.items():
         curves = []
@@ -176,7 +185,7 @@ def run_ablation(df, evaluate, evaluate_test):
     rows = []
     for group, name, method, kw, base in configs:
         is_base = base is not None and kw in ({}, dict(ts_n_cand=5, ts_tenure=7), dict(sa_p0=0.5))
-        runs = base.to_dict("records") if is_base else run_set(evaluate, method, SEEDS, **kw)[0]
+        runs = base.to_dict("records") if is_base else run_set(evaluate, method, cfg.SEEDS, **kw)[0]
         fits = np.array([r["fitness"] for r in runs])
         tests = np.array([evaluate_test(r["best_x"])[0] for r in runs])
         p = np.nan
@@ -215,8 +224,8 @@ def run_ablation(df, evaluate, evaluate_test):
 def main(quick=False, stopping="evaluations", time_limit=None):
     started = time.perf_counter()
     os.makedirs(OUT, exist_ok=True)
-    scen = mdl.sample_scenarios(N_SCEN, SCEN_SEED)
-    test = mdl.sample_scenarios(TEST_SCEN, TEST_SEED)
+    scen = mdl.sample_scenarios(cfg.N_SCEN, cfg.SCEN_SEED)
+    test = mdl.sample_scenarios(cfg.TEST_SCEN, cfg.TEST_SEED)
     evaluate = functools.partial(mdl.evaluate, scenarios=scen)
     evaluate_test = functools.partial(mdl.evaluate, scenarios=test)
     stop_kw = dict(stopping_criterion=stopping, time_limit_sec=time_limit)
@@ -224,12 +233,12 @@ def main(quick=False, stopping="evaluations", time_limit=None):
     print(f"Python {platform.python_version()}, numpy {np.__version__}, "
           f"{platform.processor() or platform.machine()}")
     print(f"Điều kiện dừng: {stopping}"
-          + (f" (ngân sách {ga.BUDGET})" if stopping == "evaluations" else f" (tối đa {time_limit:g} giây)"))
+          + (f" (ngân sách {cfg.BUDGET})" if stopping == "evaluations" else f" (tối đa {time_limit:g} giây)"))
 
     # ---------------------------------------------------- thí nghiệm chính
     all_rows, all_hist, all_time_hist = [], {}, {}
     for method, label in LABEL.items():
-        rows, hists = run_set(evaluate, method, SEEDS, **stop_kw)
+        rows, hists = run_set(evaluate, method, cfg.SEEDS, **stop_kw)
         th = {}
         for r in rows:
             r["algorithm"] = label
@@ -244,7 +253,7 @@ def main(quick=False, stopping="evaluations", time_limit=None):
     target = df[df.algorithm == BASE].fitness.median()
     for i, r in df.iterrows():
         h = all_hist[r.algorithm][r.seed]
-        f_init, f_fin = h[ga.POP_SIZE - 1][1], h[-1][1]
+        f_init, f_fin = h[cfg.POP_SIZE - 1][1], h[-1][1]
         df.loc[i, "evals_to_95pct_gain"] = first_reach(h, f_init + 0.95 * (f_fin - f_init))
         df.loc[i, "evals_to_spga_median"] = first_reach(h, target)
         df.loc[i, "time_to_95pct_gain"] = first_reach_time(
@@ -292,20 +301,20 @@ def main(quick=False, stopping="evaluations", time_limit=None):
     best = df.loc[df.fitness.idxmax()]
     d = mdl.decode(best.best_x)
     rows = []
-    for m in range(mdl.M):
-        rows.append([f"Tester M{m+1}", "Đầu tư (in-house)", mdl.K0_M[m], d["K_m"][m]] + [""] * (mdl.P - 1))
+    for m in range(cfg.M):
+        rows.append([f"Tester M{m+1}", "Đầu tư (in-house)", cfg.K0_M[m], d["K_m"][m]] + [""] * (cfg.P - 1))
         rows.append([f"Tester M{m+1}", "Chuyển/thuê", 0] + list(d["X_m"][:, m]))
-        rows.append([f"Tester M{m+1}", "Tổng", mdl.K0_M[m]] + list(d["K_m"][m] + d["X_m"][:, m]))
-    for a_ in range(mdl.A):
-        rows.append([f"Handler H{a_+1}", "Đầu tư (in-house)", mdl.K0_A[a_], d["K_a"][a_]] + [""] * (mdl.P - 1))
+        rows.append([f"Tester M{m+1}", "Tổng", cfg.K0_M[m]] + list(d["K_m"][m] + d["X_m"][:, m]))
+    for a_ in range(cfg.A):
+        rows.append([f"Handler H{a_+1}", "Đầu tư (in-house)", cfg.K0_A[a_], d["K_a"][a_]] + [""] * (cfg.P - 1))
         rows.append([f"Handler H{a_+1}", "Chuyển/thuê", 0] + list(d["X_a"][:, a_]))
-        rows.append([f"Handler H{a_+1}", "Tổng", mdl.K0_A[a_]] + list(d["K_a"][a_] + d["X_a"][:, a_]))
-    pd.DataFrame(rows, columns=["Nguồn lực", "Loại", "Quý 0"] + [f"Quý {p}" for p in range(1, mdl.P + 1)]
+        rows.append([f"Handler H{a_+1}", "Tổng", cfg.K0_A[a_]] + list(d["K_a"][a_] + d["X_a"][:, a_]))
+    pd.DataFrame(rows, columns=["Nguồn lực", "Loại", "Quý 0"] + [f"Quý {p}" for p in range(1, cfg.P + 1)]
                  ).to_csv(f"{OUT}/best_portfolio.csv", index=False, encoding="utf-8-sig")
     qrows = []
-    for p in range(mdl.P):
-        qrows.append([p + 1] + [round(d["Q"][p, m, t]) for m in range(mdl.M) for t in range(mdl.T)])
-    pd.DataFrame(qrows, columns=["Quý"] + [f"M{m+1}-SP{t+1}" for m in range(mdl.M) for t in range(mdl.T)]
+    for p in range(cfg.P):
+        qrows.append([p + 1] + [round(d["Q"][p, m, t]) for m in range(cfg.M) for t in range(cfg.T)])
+    pd.DataFrame(qrows, columns=["Quý"] + [f"M{m+1}-SP{t+1}" for m in range(cfg.M) for t in range(cfg.T)]
                  ).to_csv(f"{OUT}/best_allocation.csv", index=False, encoding="utf-8-sig")
     print(f"Nghiệm tốt nhất: {best.algorithm} seed {best.seed}, fitness {best.fitness:,.0f}")
     print(f"Thí nghiệm chính: {time.perf_counter() - started:.1f} giây", flush=True)
@@ -320,7 +329,7 @@ if __name__ == "__main__":
     ap.add_argument("--quick", action="store_true")
     ap.add_argument("--stopping", choices=["evaluations", "time"], default="evaluations",
                     help="Điều kiện dừng: theo ngân sách đánh giá (mặc định) hoặc theo thời gian thực")
-    ap.add_argument("--time-limit", type=float, default=ga.TIME_LIMIT_SEC,
+    ap.add_argument("--time-limit", type=float, default=cfg.TIME_LIMIT_SEC,
                     help="Giới hạn thời gian thực (giây) khi --stopping time")
     a = ap.parse_args()
     main(quick=a.quick, stopping=a.stopping, time_limit=a.time_limit)

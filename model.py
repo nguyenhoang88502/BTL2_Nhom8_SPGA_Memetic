@@ -1,178 +1,184 @@
 """
-model.py - Phần 3: mô hình bài toán hoạch định danh mục nguồn lực (bản rút gọn).
+model.py - MÔ HÌNH BÀI TOÁN: cho một phương án mua/thuê máy, tính ra lợi nhuận.
 
-Giao diện (theo tab "Thông số chung"):
-    sample_scenarios(N, seed) -> ndarray [N, 8, 3]
-    repair(x)                 -> x  (đã sửa cho khả thi)
-    evaluate(x, scenarios)    -> (fitness, mean_profit, mad)
-    decode(x)                 -> dict số máy nguyên và sản lượng
-    encode(dict)              -> x
+File này KHÔNG có thuật toán tìm kiếm. Nó chỉ trả lời câu hỏi:
+    "Nếu mua/thuê máy và phân bổ sản lượng như thế này thì lãi bao nhiêu, rủi ro thế nào?"
 
-Quy mô giữ như bài báo Wang, Wang & Chen (2008): 3 tester (M1-M3), 4 handler
-(H1-H4), 3 sản phẩm (SP1 MTS; SP2, SP3 MTO), 8 quý.
-Số liệu lấy từ bài báo: vốn ban đầu 20 triệu, lãi 2%/kỳ, hiệu suất mục tiêu 80%,
-1800 giờ/kỳ, sigma = 7000, k = 0.5, số máy ban đầu (Bảng 1, kỳ 0).
-Các số liệu còn lại (đánh dấu GIẢ ĐỊNH) là giả định vì bài báo không công bố.
+Quan hệ với hai file còn lại:
+    config.py (số liệu)  ->  model.py (file này)  ->  solver.py (thuật toán dùng model để chấm điểm)
+Mọi con số đọc từ config.py dưới dạng cfg.TÊN, tại thời điểm gọi hàm. Nhờ vậy khi demo đổi
+cfg.K_RISK, cfg.SIGMA hay cfg.MU thì model dùng ngay giá trị mới.
+
+Thứ tự đọc nên theo:
+    1. Hằng số dẫn xuất (cách một phương án được ghi thành 135 gen)
+    2. decode / encode  : đổi qua lại giữa "135 gen" và "phương án đọc được" (số máy, sản lượng)
+    3. _loads / repair  : kiểm tra máy có đủ công suất không, nếu không thì giảm sản lượng
+    4. sample_scenarios : sinh các kịch bản nhu cầu
+    5. scenario_profits : lợi nhuận của phương án trong từng kịch bản
+    6. evaluate         : điểm Z cuối cùng (hàm duy nhất mà thuật toán gọi)
+
+Quy mô như bài báo Wang, Wang & Chen (2008): 3 tester (M1-M3), 4 handler (H1-H4),
+3 sản phẩm (SP1 làm để dự trữ, SP2 và SP3 làm theo đơn), 8 quý.
 """
 import numpy as np
 
-# ----------------------------------------------------------------- kích thước
-P, M, A, T = 8, 3, 4, 3                  # quý, tester, handler, sản phẩm
-MTS = np.array([True, False, False])     # SP1 make-to-stock, SP2-SP3 make-to-order
+import config as cfg
 
-# --------------------------------------------------------- số liệu từ bài báo
-F0 = 20_000_000.0        # vốn ban đầu
-I_RATE = 0.02            # lãi suất mỗi kỳ
-UTIL = 0.80              # hiệu suất mục tiêu (tester và handler)
-HOURS = 1800.0           # giờ làm việc mỗi kỳ
-SIGMA = 7000.0           # độ lệch chuẩn nhu cầu
-K_RISK = 0.5             # hệ số đánh đổi lợi nhuận - rủi ro
-K0_M = np.array([2, 1, 1])           # số tester ban đầu (Bảng 1a, kỳ 0)
-K0_A = np.array([2, 3, 3, 2])        # số handler ban đầu (Bảng 1b, kỳ 0)
+# ---------------------------------------------------------------- hằng số dẫn xuất
+# Một phương án (cá thể) được ghi thành 1 vector 135 số trong [0, 1] gọi là "gen":
+#   3 gen  : số tester mua thêm của từng loại
+#   4 gen  : số handler mua thêm của từng loại
+#   24 gen : số tester thuê mỗi quý (8 quý x 3 loại)
+#   32 gen : số handler thuê mỗi quý (8 quý x 4 loại)
+#   72 gen : sản lượng mỗi quý, mỗi tester, mỗi sản phẩm (8 x 3 x 3)
+N_GENES = cfg.M + cfg.A + cfg.P * cfg.M + cfg.P * cfg.A + cfg.P * cfg.M * cfg.T   # 3 + 4 + 24 + 32 + 72 = 135
+SL_KM = slice(0, 3)       # vị trí các gen "tester mua thêm"
+SL_KA = slice(3, 7)       # vị trí các gen "handler mua thêm"
+SL_XM = slice(7, 31)      # vị trí các gen "tester thuê theo quý"
+SL_XA = slice(31, 63)     # vị trí các gen "handler thuê theo quý"
+SL_Q = slice(63, 135)     # vị trí các gen "sản lượng"
 
-# ---------------------------------------------------------- số liệu GIẢ ĐỊNH
-MU = np.array([25_000.0, 22_000.0, 15_000.0])   # nhu cầu trung bình mỗi quý
-B = np.array([200.0, 230.0, 260.0])             # lợi nhuận đơn vị b_t
-J_HOLD = np.array([10.0, 0, 0])                 # chi phí tồn kho/đv/kỳ (chỉ MTS)
-L_BACK = np.array([40.0, 0, 0])                 # chi phí thiếu hàng/đv/kỳ (chỉ MTS)
+CAP_M = cfg.R_MT * cfg.HOURS * cfg.UTIL      # sản lượng 1 tester làm được trong 1 quý, theo sản phẩm [M, T] (đơn vị/quý)
+CAP_H = cfg.R_H * cfg.HOURS * cfg.UTIL       # sản lượng 1 handler làm được trong 1 quý [A] (đơn vị/quý)
 
-# c_{m,t}: tester nào làm được sản phẩm nào (theo cấu trúc Bảng 1c)
-C_MT = np.array([[1, 1, 0],    # M1: SP1, SP2
-                 [1, 0, 1],    # M2: SP1, SP3
-                 [0, 1, 1]])   # M3: SP2, SP3
-# throughput lý thuyết r_{m,t} (đv/giờ)
-R_MT = np.array([[3.0, 2.6, 0.0],
-                 [3.4, 0.0, 2.4],
-                 [0.0, 3.0, 2.8]])
-# cấu hình đơn giản hóa (3): mỗi cặp (tester, sản phẩm) đi với 1 handler cố định
-H_OF = np.array([[0, 1, -1],   # M1-SP1 -> H1, M1-SP2 -> H2
-                 [1, -1, 2],   # M2-SP1 -> H2, M2-SP3 -> H3
-                 [-1, 3, 2]])  # M3-SP2 -> H4, M3-SP3 -> H3
-R_H = np.array([4.0, 3.6, 3.2, 3.8])            # throughput handler (đv/giờ)
 
-E_M = np.array([1_500_000.0, 1_700_000.0, 1_900_000.0])  # giá mua tester
-D_M = 0.4 * E_M                                          # giá thanh lý tester
-U_M = np.array([140_000.0, 160_000.0, 180_000.0])        # chi phí chuyển/thuê tester/quý
-E_A = np.array([150_000.0, 160_000.0, 170_000.0, 155_000.0])  # giá mua handler
-D_A = 0.4 * E_A
-U_A = np.array([14_000.0, 15_000.0, 16_000.0, 14_500.0])
-
-# ---------------------------------------------------------------- giải mã gen
-K_EXTRA_M, K_EXTRA_A = 6, 8      # mua thêm tối đa so với ban đầu
-X_MAX_M, X_MAX_A = 6, 8          # chuyển/thuê tối đa mỗi quý
-Q_MAX = 1.5 * MU                 # sản lượng tối đa 1 tester làm cho 1 sản phẩm/quý
-
-N_GENES = M + A + P * M + P * A + P * M * T      # 3 + 4 + 24 + 32 + 72 = 135
-SL_KM = slice(0, 3)
-SL_KA = slice(3, 7)
-SL_XM = slice(7, 31)
-SL_XA = slice(31, 63)
-SL_Q = slice(63, 135)
-
-CAP_M = R_MT * HOURS * UTIL      # sản lượng 1 tester/quý theo sản phẩm [M, T]
-CAP_H = R_H * HOURS * UTIL       # sản lượng 1 handler/quý [A]
+def q_max():
+    """Làm gì: tính sản lượng tối đa 1 tester được làm cho mỗi sản phẩm trong 1 quý.
+    Nhận vào: không có (đọc cfg.Q_MAX_FACTOR và cfg.MU tại thời điểm gọi).
+    Trả ra: mảng 3 số [SP1, SP2, SP3], đơn vị sản phẩm/quý.
+    Ví dụ: nhu cầu trung bình SP1 là 25 000 thì 1 tester làm tối đa 1.5 x 25 000 = 37 500 SP1 mỗi quý.
+    Vì phải theo cfg.MU hiện tại (demo có thể đổi MU) nên đây là hàm chứ không phải hằng số."""
+    return cfg.Q_MAX_FACTOR * cfg.MU
 
 
 def decode(x):
-    """Gen [0,1] -> dict số nguyên và sản lượng."""
+    """Làm gì: đổi 135 gen trong [0, 1] thành phương án đọc được (số máy nguyên và sản lượng).
+    Nhận vào: x, vector 135 số (số ngoài [0, 1] sẽ bị cắt về [0, 1]).
+    Trả ra: dict gồm
+        K_m [3]       số tester sở hữu mỗi loại,   K_a [4]  số handler sở hữu mỗi loại,
+        X_m [8, 3]    số tester thuê mỗi quý,       X_a [8, 4]  số handler thuê mỗi quý,
+        Q [8, 3, 3]   sản lượng theo (quý, tester, sản phẩm); ô tester không làm được sản phẩm thì bằng 0.
+    Ví dụ: gen 0.5 ở ô "tester M1 mua thêm" với tối đa mua thêm 6 máy -> mua thêm 3 máy, M1 có 2 + 3 = 5 máy."""
     x = np.clip(np.asarray(x, dtype=float), 0.0, 1.0)
     return {
-        "K_m": K0_M + np.rint(x[SL_KM] * K_EXTRA_M).astype(int),
-        "K_a": K0_A + np.rint(x[SL_KA] * K_EXTRA_A).astype(int),
-        "X_m": np.rint(x[SL_XM].reshape(P, M) * X_MAX_M).astype(int),
-        "X_a": np.rint(x[SL_XA].reshape(P, A) * X_MAX_A).astype(int),
-        "Q": x[SL_Q].reshape(P, M, T) * Q_MAX[None, None, :] * C_MT[None, :, :],
+        "K_m": cfg.K0_M + np.rint(x[SL_KM] * cfg.K_EXTRA_M).astype(int),
+        "K_a": cfg.K0_A + np.rint(x[SL_KA] * cfg.K_EXTRA_A).astype(int),
+        "X_m": np.rint(x[SL_XM].reshape(cfg.P, cfg.M) * cfg.X_MAX_M).astype(int),
+        "X_a": np.rint(x[SL_XA].reshape(cfg.P, cfg.A) * cfg.X_MAX_A).astype(int),
+        "Q": x[SL_Q].reshape(cfg.P, cfg.M, cfg.T) * q_max()[None, None, :] * cfg.C_MT[None, :, :],
     }
 
 
-def encode(d):
-    """dict -> gen [0,1] (ngược của decode)."""
+def encode(plan):
+    """Làm gì: đổi phương án đọc được về lại 135 gen (ngược của decode).
+    Nhận vào: plan, dict có đủ 5 khóa K_m, K_a, X_m, X_a, Q như decode trả ra.
+    Trả ra: vector 135 số trong [0, 1].
+    Ví dụ: M1 có 5 máy (ban đầu 2, tối đa thêm 6) -> gen = (5 - 2) / 6 = 0.5."""
     x = np.empty(N_GENES)
-    x[SL_KM] = (np.asarray(d["K_m"]) - K0_M) / K_EXTRA_M
-    x[SL_KA] = (np.asarray(d["K_a"]) - K0_A) / K_EXTRA_A
-    x[SL_XM] = (np.asarray(d["X_m"]) / X_MAX_M).ravel()
-    x[SL_XA] = (np.asarray(d["X_a"]) / X_MAX_A).ravel()
-    x[SL_Q] = (np.asarray(d["Q"], dtype=float) / Q_MAX[None, None, :]).ravel()
+    x[SL_KM] = (np.asarray(plan["K_m"]) - cfg.K0_M) / cfg.K_EXTRA_M
+    x[SL_KA] = (np.asarray(plan["K_a"]) - cfg.K0_A) / cfg.K_EXTRA_A
+    x[SL_XM] = (np.asarray(plan["X_m"]) / cfg.X_MAX_M).ravel()
+    x[SL_XA] = (np.asarray(plan["X_a"]) / cfg.X_MAX_A).ravel()
+    x[SL_Q] = (np.asarray(plan["Q"], dtype=float) / q_max()[None, None, :]).ravel()
     return np.clip(x, 0.0, 1.0)
 
 
-def _loads(d):
-    """Số máy cần (tính bằng máy tương đương) cho tester [P,M] và handler [P,A]."""
-    Q = d["Q"]
-    need_m = np.where(C_MT > 0, Q / np.where(CAP_M > 0, CAP_M, 1.0), 0.0).sum(axis=2)
-    need_a = np.zeros((P, A))
-    for m in range(M):
-        for t in range(T):
-            a = H_OF[m, t]
+def _loads(plan):
+    """Làm gì: tính mỗi quý cần bao nhiêu máy để làm hết sản lượng đã định.
+    Nhận vào: plan, dict đã decode.
+    Trả ra: (need_m [8, 3], need_a [8, 4]) = số tester và số handler cần, tính bằng "máy tương đương"
+        (có thể lẻ, ví dụ 2.4 máy nghĩa là cần hơn 2 máy làm việc ở hiệu suất mục tiêu).
+    Ví dụ: sản lượng quý 1 của M1 cần 2.4 máy mà chỉ có 2 máy -> không đủ công suất, repair sẽ giảm sản lượng."""
+    Q = plan["Q"]
+    need_m = np.where(cfg.C_MT > 0, Q / np.where(CAP_M > 0, CAP_M, 1.0), 0.0).sum(axis=2)
+    need_a = np.zeros((cfg.P, cfg.A))
+    for m in range(cfg.M):
+        for t in range(cfg.T):
+            a = cfg.H_OF[m, t]
             if a >= 0:
                 need_a[:, a] += Q[:, m, t] / CAP_H[a]
     return need_m, need_a
 
 
 def repair(x):
-    """Sửa nghiệm cho thỏa (2) và (4): nếu năng lực máy không đủ thì co sản lượng.
+    """Làm gì: sửa phương án cho khả thi - nếu máy không đủ công suất thì giảm sản lượng cho vừa.
+    Nhận vào: x, vector 135 gen có thể vi phạm công suất.
+    Trả ra: vector 135 gen đã sửa (số máy giữ nguyên, chỉ co các gen sản lượng).
+    Ví dụ: cần 2.4 handler H1 mà chỉ có 2 -> mọi sản lượng đi qua H1 bị nhân 2 / 2.4 = 0.83.
     Gen của cặp (tester, sản phẩm) không tương thích được đặt về 0."""
-    d = decode(x)
-    Q = d["Q"]
-    # (4) handler: co sản lượng các cặp (m,t) dùng handler bị quá tải
-    _, need_a = _loads(d)
-    have_a = d["K_a"][None, :] + d["X_a"]
+    plan = decode(x)
+    Q = plan["Q"]
+    # (4) handler: co sản lượng các cặp (m, t) dùng handler bị quá tải
+    _, need_a = _loads(plan)
+    have_a = plan["K_a"][None, :] + plan["X_a"]
     ratio_a = np.minimum(1.0, have_a / np.maximum(need_a, 1e-9))
-    for m in range(M):
-        for t in range(T):
-            a = H_OF[m, t]
+    for m in range(cfg.M):
+        for t in range(cfg.T):
+            a = cfg.H_OF[m, t]
             if a >= 0:
                 Q[:, m, t] *= ratio_a[:, a]
-    # (2) tester
-    need_m, _ = _loads(d)
-    have_m = d["K_m"][None, :] + d["X_m"]
+    # (2) tester: co sản lượng của tester bị quá tải
+    need_m, _ = _loads(plan)
+    have_m = plan["K_m"][None, :] + plan["X_m"]
     ratio_m = np.minimum(1.0, have_m / np.maximum(need_m, 1e-9))
     Q *= ratio_m[:, :, None]
-    d["Q"] = Q
-    return encode(d)
+    plan["Q"] = Q
+    return encode(plan)
 
 
 def sample_scenarios(N=30, seed=0, mu=None, sigma=None):
-    """N kịch bản nhu cầu chuẩn N(MU, SIGMA), cắt tại 0. Trả về [N, 8, 3].
-    mu/sigma tùy chọn để chạy nền an toàn mà không đọc global MU/SIGMA."""
-    mu = MU if mu is None else np.asarray(mu, dtype=float)
-    sig = SIGMA if sigma is None else float(sigma)
+    """Làm gì: sinh N kịch bản nhu cầu ngẫu nhiên (phân phối chuẩn quanh nhu cầu trung bình, cắt tại 0).
+    Nhận vào: N số kịch bản; seed hạt giống (cùng seed cho cùng kịch bản);
+        mu, sigma tùy chọn - nếu bỏ trống thì đọc cfg.MU, cfg.SIGMA (truyền vào khi chạy nền
+        để không bị ảnh hưởng nếu demo đổi cfg giữa chừng).
+    Trả ra: mảng [N, 8, 3] = nhu cầu của từng kịch bản, từng quý, từng sản phẩm.
+    Ví dụ: kịch bản số 5, quý 2, SP1 có thể là 31 200 đơn vị (trung bình 25 000, lệch chuẩn 7 000)."""
+    mu = cfg.MU if mu is None else np.asarray(mu, dtype=float)
+    sig = cfg.SIGMA if sigma is None else float(sigma)
     rng = np.random.default_rng(seed)
-    o = rng.normal(mu[None, None, :], sig, size=(N, P, T))
-    return np.maximum(o, 0.0)
+    demand = rng.normal(mu[None, None, :], sig, size=(N, cfg.P, cfg.T))
+    return np.maximum(demand, 0.0)
 
 
 def scenario_profits(x, scenarios):
-    """Lợi nhuận h của từng kịch bản theo (5), (6), (7), (8), (9)."""
-    d = decode(x)
-    Q = d["Q"]                                   # [P, M, T]
-    prod = (C_MT[None] * Q).sum(axis=1)          # [P, T] sản lượng theo sản phẩm
-    o = scenarios                                # [N, P, T]
-    N = o.shape[0]
+    """Làm gì: tính lợi nhuận của phương án trong TỪNG kịch bản nhu cầu (công thức (5) đến (9) của mô hình).
+    Nhận vào: x vector 135 gen; scenarios mảng [N, 8, 3] từ sample_scenarios.
+    Trả ra: mảng N số, lợi nhuận (đồng) ở mỗi kịch bản.
+    Ví dụ: kịch bản nhu cầu cao thì bán được nhiều, lãi cao; kịch bản nhu cầu thấp thì tồn kho,
+    lãi thấp - hàm này cho biết lãi ở từng kịch bản đó."""
+    plan = decode(x)
+    Q = plan["Q"]                                   # [P, M, T]
+    prod = (cfg.C_MT[None] * Q).sum(axis=1)         # [P, T] sản lượng theo sản phẩm
+    demand = scenarios                              # [N, P, T]
+    N = demand.shape[0]
 
     # chi phí chuyển/thuê mỗi quý (không phụ thuộc kịch bản)
-    out_cost = (d["X_m"] * U_M[None]).sum(axis=1) + (d["X_a"] * U_A[None]).sum(axis=1)
+    out_cost = (plan["X_m"] * cfg.U_M[None]).sum(axis=1) + (plan["X_a"] * cfg.U_A[None]).sum(axis=1)
 
-    F = np.full(N, F0)
-    S = np.zeros(N)                              # tồn kho ròng SP1 (MTS)
-    for p in range(P):
+    F = np.full(N, cfg.F0)                          # vốn tiền mặt của từng kịch bản
+    S = np.zeros(N)                                 # tồn kho ròng SP1 (MTS)
+    for p in range(cfg.P):
         # (5) cân bằng tồn kho MTS
-        S = S + prod[p, 0] - o[:, p, 0]
+        S = S + prod[p, 0] - demand[:, p, 0]
         # (7) chi phí tồn kho / thiếu hàng
-        V = np.where(S >= 0, J_HOLD[0] * S, L_BACK[0] * (-S))
+        V = np.where(S >= 0, cfg.J_HOLD[0] * S, cfg.L_BACK[0] * (-S))
         # (6) MTO: chỉ bán được tối đa bằng nhu cầu, phần làm dư không có doanh thu
-        mto_sold = np.minimum(prod[p, 1:][None, :], o[:, p, 1:])
-        income = B[0] * o[:, p, 0] + (B[1:][None, :] * mto_sold).sum(axis=1)
+        mto_sold = np.minimum(prod[p, 1:][None, :], demand[:, p, 1:])
+        income = cfg.B[0] * demand[:, p, 0] + (cfg.B[1:][None, :] * mto_sold).sum(axis=1)
         # (8) cân bằng vốn
-        F = F * (1 + I_RATE) - out_cost[p] - V + income
+        F = F * (1 + cfg.I_RATE) - out_cost[p] - V + income
     # (9) lợi nhuận = giá trị hiện tại của vốn cuối kỳ - chi phí đầu tư ròng
-    invest = ((E_M - D_M) * (d["K_m"] - K0_M)).sum() + ((E_A - D_A) * (d["K_a"] - K0_A)).sum()
-    return F / (1 + I_RATE) ** P - invest
+    invest = (((cfg.E_M - cfg.D_M) * (plan["K_m"] - cfg.K0_M)).sum()
+              + ((cfg.E_A - cfg.D_A) * (plan["K_a"] - cfg.K0_A)).sum())
+    return F / (1 + cfg.I_RATE) ** cfg.P - invest
 
 
 def evaluate(x, scenarios):
-    """Fitness = (1-k)*mean(h) - k*MAD(h). Trả về (fitness, mean_profit, mad)."""
-    h = scenario_profits(x, scenarios)
-    mean = float(h.mean())
-    mad = float(np.abs(h - mean).mean())
-    return (1 - K_RISK) * mean - K_RISK * mad, mean, mad
+    """Làm gì: chấm điểm Z của phương án = (1 - k) x lợi nhuận trung bình - k x MAD (MAD = độ dao động của lợi nhuận).
+    Nhận vào: x vector 135 gen; scenarios mảng kịch bản nhu cầu.
+    Trả ra: bộ ba (Z, lợi nhuận trung bình, MAD), đơn vị đồng. Z càng lớn càng tốt.
+    Ví dụ: lãi trung bình 50 triệu nhưng dao động 10 triệu, k = 0.5 -> Z = 0.5 x 50 - 0.5 x 10 = 45 triệu."""
+    profits = scenario_profits(x, scenarios)
+    mean = float(profits.mean())
+    mad = float(np.abs(profits - mean).mean())
+    return (1 - cfg.K_RISK) * mean - cfg.K_RISK * mad, mean, mad

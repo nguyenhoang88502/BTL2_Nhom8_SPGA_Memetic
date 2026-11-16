@@ -1,21 +1,21 @@
 """
-demo_server.py - server nhỏ cho bản demo HTML (Nhóm 8 - SPGA gốc, GA-TS, GA-SA, GA-LP).
+demo_server.py - server nhỏ cho bản demo HTML (Nhóm 8 - SPGA gốc, GA-TS, GA-SA).
 
-Chạy:  python demo_server.py [--port 8765]
+Chạy:  python cong_cu/demo_server.py [--port 8765]   (hoặc bấm đúp CHAY_DEMO.bat ở thư mục gốc)
 Mở:    http://localhost:8765
 
 API:
-  GET /                  -> demo.html
+  GET /                  -> cong_cu/demo.html
   GET /api/defaults      -> tham số mặc định
   GET /api/run?...       -> chạy thuật toán, gửi từng thế hệ (Server-Sent Events)
   GET /api/results       -> kết quả thực nghiệm đã lưu trong output/
-  GET /api/rerun         -> chạy lại main.py --quick, gửi log (Server-Sent Events)
+  GET /api/rerun         -> chạy lại cong_cu/main.py --quick, gửi log (Server-Sent Events)
   GET/POST /api/run-benchmark -> kiểm định lặp nhiều seed (SSE), tự động chạy MILP nền
   GET /api/sensitivity   -> phân tích độ nhạy k × σ (SSE)
   GET/POST /api/export-excel -> tải báo cáo Excel 1 sheet
   GET/POST /api/milp, GET /api/milp/status -> cận tối ưu toàn cục MILP (chạy nền)
-  GET /output/<file>     -> hình trong output/
-Server chuẩn + numpy; exporter cần scipy/pandas/matplotlib/openpyxl; MILP cần pulp.
+  GET /output/<file>     -> hình trong output/ (thư mục gốc)
+Server chuẩn + numpy; exporter cần scipy/pandas/matplotlib/openpyxl; MILP (cận chuẩn, solver.solve_milp) cần pulp.
 """
 import argparse
 import csv
@@ -31,15 +31,18 @@ from urllib.parse import urlparse, parse_qs
 
 import numpy as np
 
-HERE = os.path.dirname(os.path.abspath(__file__))
+HERE = os.path.dirname(os.path.abspath(__file__))     # thư mục cong_cu/ (chứa demo.html, exporter.py, main.py)
+ROOT = os.path.dirname(HERE)                          # thư mục gốc (chứa config.py, model.py, solver.py, output/)
+OUTPUT_DIR = os.path.join(ROOT, "output")
+sys.path.insert(0, ROOT)
 sys.path.insert(0, HERE)
+import config as cfg  # noqa: E402
 import model as mdl  # noqa: E402
-import ga  # noqa: E402
+import solver  # noqa: E402
 import exporter  # noqa: E402
-import milp_solver  # noqa: E402
-import matheuristics  # noqa: E402
 
-DEFAULT_MODEL = dict(K_RISK=mdl.K_RISK, SIGMA=mdl.SIGMA, MU=mdl.MU.copy())
+# Demo đổi K_RISK, SIGMA, MU ngay trong cfg khi chạy; bản gốc được lưu ở đây để khôi phục sau mỗi lần chạy.
+DEFAULT_MODEL = dict(K_RISK=cfg.K_RISK, SIGMA=cfg.SIGMA, MU=cfg.MU.copy())
 RUN_LOCK = threading.Lock()
 # Kết quả kiểm định lặp / độ nhạy / MILP được cache lại để export và UI đọc lại không cần chạy lại.
 BENCHMARK_CACHE = {}
@@ -51,14 +54,13 @@ MILP_THREAD = None
 # ---------------------------------------------------------------- log ra terminal (cho người xem demo)
 if os.name == "nt":
     os.system("")  # bật màu ANSI trên cửa sổ PowerShell/cmd của Windows 10/11
-COL = {"spga": "\033[94m", "ts": "\033[93m", "sa": "\033[92m", "ml": "\033[95m",
+COL = {"spga": "\033[94m", "ts": "\033[93m", "sa": "\033[92m",
        "ok": "\033[92m", "dim": "\033[90m", "head": "\033[96m", "bold": "\033[1m", "end": "\033[0m"}
-TAG = {"spga": "SPGA ", "ts": "GA-TS", "sa": "GA-SA", "ml": "GA-LP"}
-LS_METHOD = {"spga": "none", "ts": "tabu", "sa": "sa", "ml": "none"}
-MODES = {"all": ("spga", "ts", "sa", "ml"), "spga": ("spga",), "ts": ("ts",),
-         "sa": ("sa",), "ml": ("ml",)}
-FULL_LABEL = {"spga": "SPGA gốc", "ts": "GA-TS", "sa": "GA-SA", "ml": "Matheuristics (GA-LP)"}
-ALL_CODES = ("spga", "ts", "sa", "ml")
+TAG = {"spga": "SPGA ", "ts": "GA-TS", "sa": "GA-SA"}
+LS_METHOD = {"spga": "none", "ts": "tabu", "sa": "sa"}
+MODES = {"all": ("spga", "ts", "sa"), "spga": ("spga",), "ts": ("ts",), "sa": ("sa",)}
+FULL_LABEL = {"spga": "SPGA gốc", "ts": "GA-TS", "sa": "GA-SA"}
+ALL_CODES = ("spga", "ts", "sa")
 
 
 def selected_algos(q):
@@ -86,16 +88,17 @@ def log(msg, col=None):
         print(f"{t} {msg}".encode("ascii", "replace").decode(), flush=True)
 
 DEFAULTS = {
-    "k": 0.5, "sigma": 7000, "n_scen": 30, "scen_seed": 2026,
-    "mu1": 25000, "mu2": 22000, "mu3": 15000,
-    "pop": 30, "pc": 0.9, "pm": 0.05, "tour": 2, "budget": 6000,
-    "ls_freq": 10, "ls_top": 3, "ls_max": 20, "ls_shift": 10, "lamarck": 1,
-    "ts_n_cand": ga.TS_N_CAND, "ts_tenure": ga.TS_TENURE, "sa_p0": ga.SA_P0,
+    "k": cfg.K_RISK, "sigma": cfg.SIGMA, "n_scen": cfg.N_SCEN, "scen_seed": cfg.SCEN_SEED,
+    "mu1": cfg.MU[0], "mu2": cfg.MU[1], "mu3": cfg.MU[2],
+    "pop": cfg.POP_SIZE, "pc": cfg.PC, "pm": cfg.PM, "tour": cfg.TOURNAMENT, "budget": cfg.BUDGET,
+    "ls_freq": cfg.LS_FREQ, "ls_top": cfg.LS_TOP, "ls_max": cfg.LS_MAX_EVALS, "ls_shift": round(cfg.LS_SHIFT * 100),
+    "lamarck": 1,
+    "ts_n_cand": cfg.TS_N_CAND, "ts_tenure": cfg.TS_TENURE, "sa_p0": cfg.SA_P0,
     "seed": 1, "mode": "all", "delay": 30,
     "n_runs": 10, "sens_k_min": 0.0, "sens_k_max": 1.0, "sens_k_steps": 5,
     "sens_sigma_min": 1000, "sens_sigma_max": 15000, "sens_sigma_steps": 5,
-    "sens_budget": 2000, "sens_runs": 1, "alpha": 0.05, "time_limit": 120,
-    "stopping": "evaluations", "time_limit_sec": 180.0,
+    "sens_budget": 2000, "sens_runs": 1, "alpha": 0.05, "time_limit": cfg.MILP_TIME_LIMIT_SEC,
+    "stopping": "evaluations", "time_limit_sec": cfg.TIME_LIMIT_SEC,
 }
 
 
@@ -145,7 +148,7 @@ def plan_summary(x, scen):
     h = mdl.scenario_profits(x, scen)
     f, mean, mad = mdl.evaluate(x, scen)
     return {
-        "owned": [int(d["K_m"].sum())] * mdl.P,
+        "owned": [int(d["K_m"].sum())] * cfg.P,
         "rented": [int(v) for v in d["X_m"].sum(axis=1)],
         "need": [round(float(v), 2) for v in need_m.sum(axis=1)],
         "K_m": [int(v) for v in d["K_m"]], "K_a": [int(v) for v in d["K_a"]],
@@ -162,21 +165,13 @@ def _resample(hist, grid):
     return f[idx].tolist()
 
 
-def _plan_for(algo, best_x, scen, ev_ml):
-    """Phương án tốt nhất dạng 135 gen để vẽ biểu đồ. GA-LP (63 gen) được chuyển
-    qua dict máy + sản lượng tối ưu từ LP rồi encode lại."""
-    if algo == "ml" and ev_ml is not None:
-        return plan_summary(mdl.encode(ev_ml.plan_dict(best_x)), scen)
-    return plan_summary(best_x, scen)
-
-
 def milp_launch(k, sigma, mu, n_scen, scen_seed, time_limit=None):
     """Khởi động MILP nền (KHÔNG giữ RUN_LOCK): dùng snapshot tham số riêng nên chạy
     song song an toàn với các lần chạy GA. Bỏ qua nếu đã có kết quả cùng tham số."""
     global MILP_THREAD
     if MILP_THREAD is not None and MILP_THREAD.is_alive():
         return
-    tl = max(int(time_limit or 120), 20)
+    tl = max(int(time_limit or cfg.MILP_TIME_LIMIT_SEC), 20)
     m = MILP_CACHE
     if (m and "error" not in m and abs(float(m.get("k", -1)) - k) < 1e-9
             and abs(float(m.get("sigma", -1)) - sigma) < 1e-6
@@ -188,8 +183,8 @@ def milp_launch(k, sigma, mu, n_scen, scen_seed, time_limit=None):
         global MILP_THREAD
         try:
             log(f"TÍNH CẬN TỐI ƯU MILP (CBC, tối đa {tl}s, {n_scen} kịch bản)...", "head")
-            res = milp_solver.solve_milp_exact(k=k, sigma=sigma, n_scen=n_scen,
-                                               scen_seed=scen_seed, time_limit=tl, mu=mu_snap)
+            res = solver.solve_milp(k=k, sigma=sigma, n_scen=n_scen,
+                                    scen_seed=scen_seed, time_limit=tl, mu=mu_snap)
             MILP_CACHE.clear()
             MILP_CACHE.update(res)
             log(f"  MILP: Z_opt = {res['z_opt'] / 1e6:.3f} tr (status {res['status']}, {res['solve_time_s']:.1f}s)", "ok")
@@ -275,7 +270,7 @@ class Handler(BaseHTTPRequestHandler):
         if u.path.startswith("/output/"):
             name = os.path.basename(u.path)
             ctype = "image/png" if name.endswith(".png") else "text/plain; charset=utf-8"
-            return self.send_file(os.path.join(HERE, "output", name), ctype)
+            return self.send_file(os.path.join(OUTPUT_DIR, name), ctype)
         self.send_error(404)
 
     def do_POST(self):
@@ -296,10 +291,9 @@ class Handler(BaseHTTPRequestHandler):
         try:
             self.start_sse()
             # tham số bài toán
-            mdl.K_RISK = min(max(fnum(q, "k"), 0.0), 1.0)
-            mdl.SIGMA = max(fnum(q, "sigma"), 0.0)
-            mdl.MU = np.array([fnum(q, "mu1"), fnum(q, "mu2"), fnum(q, "mu3")])
-            mdl.Q_MAX = 1.5 * mdl.MU
+            cfg.K_RISK = min(max(fnum(q, "k"), 0.0), 1.0)
+            cfg.SIGMA = max(fnum(q, "sigma"), 0.0)
+            cfg.MU = np.array([fnum(q, "mu1"), fnum(q, "mu2"), fnum(q, "mu3")])
             scen = mdl.sample_scenarios(max(fnum(q, "n_scen", int), 2), fnum(q, "scen_seed", int))
             evaluate = functools.partial(mdl.evaluate, scenarios=scen)
             kw = dict(budget=max(fnum(q, "budget", int), 100), pop_size=max(fnum(q, "pop", int), 4),
@@ -317,20 +311,12 @@ class Handler(BaseHTTPRequestHandler):
             names = selected_algos(q)
             delay = max(fnum(q, "delay"), 0) / 1000
 
-            ev_ml = matheuristics.LpEvaluator(k=mdl.K_RISK, sigma=mdl.SIGMA, scenarios=scen) if "ml" in names else None
-            algos = []
-            for a in names:
-                if a == "ml":
-                    algos.append((a, ga.run_ga_iter(ev_ml.evaluate, "none", seed,
-                                                    repair_fn=matheuristics.repair_ml,
-                                                    n_genes=matheuristics.N_GENES_ML, **kw)))
-                else:
-                    algos.append((a, ga.run_ga_iter(evaluate, LS_METHOD[a], seed, **kw)))
-            milp_launch(k=mdl.K_RISK, sigma=mdl.SIGMA, mu=mdl.MU, n_scen=len(scen),
+            algos = [(a, solver.run_ga_iter(evaluate, LS_METHOD[a], seed, **kw)) for a in names]
+            milp_launch(k=cfg.K_RISK, sigma=cfg.SIGMA, mu=cfg.MU, n_scen=len(scen),
                         scen_seed=fnum(q, "scen_seed", int), time_limit=fnum(q, "time_limit", int))
             log("=" * 72, "head")
             log(f"BẮT ĐẦU CHẠY: {' + '.join(TAG[a].strip() for a, _ in algos)}   (seed {seed})", "head")
-            log(f"  Bài toán : k={mdl.K_RISK}  μ={[int(v) for v in mdl.MU]}  σ={mdl.SIGMA:g}  "
+            log(f"  Bài toán : k={cfg.K_RISK}  μ={[int(v) for v in cfg.MU]}  σ={cfg.SIGMA:g}  "
                 f"N={len(scen)} kịch bản (seed {fnum(q, 'scen_seed', int)})", "head")
             stop_desc = (f"ngân sách {kw['budget']} lần đánh giá" if kw["stopping_criterion"] == "evaluations"
                          else f"giới hạn {kw['time_limit_sec']:g} giây")
@@ -343,8 +329,6 @@ class Handler(BaseHTTPRequestHandler):
                 log(f"  GA-TS    : {kw['ts_n_cand']} ứng viên/vòng, tenure {kw['ts_tenure']}, tabu chung cho các cá thể", "head")
             if "sa" in names:
                 log(f"  GA-SA    : xác suất nhận ban đầu {kw['sa_p0']:g}, T0 ước lượng từ 30 lần evaluate", "head")
-            if "ml" in names:
-                log(f"  GA-LP    : 63 gen máy móc + LP (HiGHS) tối ưu sản lượng cho từng phương án", "head")
             log("=" * 72, "head")
             self.sse("start", {"algos": [a for a, _ in algos], "budget": kw["budget"],
                                "stopping": kw["stopping_criterion"], "time_limit_sec": kw["time_limit_sec"],
@@ -373,7 +357,7 @@ class Handler(BaseHTTPRequestHandler):
                     improved = st["best_f"] > best_seen[name] + 1e-9
                     if improved:
                         best_seen[name] = st["best_f"]
-                        payload["plan"] = _plan_for(name, st["best_x"], scen, ev_ml)
+                        payload["plan"] = plan_summary(st["best_x"], scen)
                     self.sse("gen", payload)
                     head = (f"[{TAG[name]}] thế hệ {st['gen']:>3} | {st['runtime']:>5.1f}/{kw['time_limit_sec']:g} giây | "
                             if kw["stopping_criterion"] == "time" else
@@ -404,7 +388,7 @@ class Handler(BaseHTTPRequestHandler):
                     log(f"KẾT QUẢ [{TAG[a]}] Z = {r['best']:.3f} triệu | {r['gen']} thế hệ | {r['evals']} đánh giá "
                         f"(tìm kiếm cục bộ: {r['ls_calls']}) | {r['runtime']:.1f} s", a)
             if finished.get("spga"):
-                for a in ("ts", "sa", "ml"):
+                for a in ("ts", "sa"):
                     if finished.get(a):
                         d = finished[a]["best"] - finished["spga"]["best"]
                         log(f"{TAG[a]} {'hơn' if d >= 0 else 'kém'} SPGA gốc: {d:+.3f} triệu "
@@ -413,9 +397,8 @@ class Handler(BaseHTTPRequestHandler):
         except (BrokenPipeError, ConnectionResetError, ConnectionAbortedError):
             log("(trình duyệt đã dừng lần chạy)", "dim")  # trình duyệt đã dừng
         finally:
-            mdl.K_RISK, mdl.SIGMA = DEFAULT_MODEL["K_RISK"], DEFAULT_MODEL["SIGMA"]
-            mdl.MU = DEFAULT_MODEL["MU"].copy()
-            mdl.Q_MAX = 1.5 * mdl.MU
+            cfg.K_RISK, cfg.SIGMA = DEFAULT_MODEL["K_RISK"], DEFAULT_MODEL["SIGMA"]
+            cfg.MU = DEFAULT_MODEL["MU"].copy()
             RUN_LOCK.release()
 
     # ------------------------------------------------------------ chạy lại main.py
@@ -424,12 +407,12 @@ class Handler(BaseHTTPRequestHandler):
             return self.send_json({"error": "Đang có một lần chạy khác"}, 409)
         try:
             self.start_sse()
-            self.sse("log", {"line": "Đang chạy: python main.py --quick (khoảng 1 phút)..."})
+            self.sse("log", {"line": "Đang chạy: python cong_cu/main.py --quick (khoảng 1 phút)..."})
             env = dict(os.environ, PYTHONIOENCODING="utf-8")
-            p = subprocess.Popen([sys.executable, "-u", "main.py", "--quick"], cwd=HERE,
+            p = subprocess.Popen([sys.executable, "-u", os.path.join(HERE, "main.py"), "--quick"], cwd=ROOT,
                                  stdout=subprocess.PIPE, stderr=subprocess.STDOUT, env=env,
                                  text=True, encoding="utf-8", errors="replace")
-            log("CHẠY LẠI THỰC NGHIỆM: python main.py --quick", "head")
+            log("CHẠY LẠI THỰC NGHIỆM: python cong_cu/main.py --quick", "head")
             for line in p.stdout:
                 print("   " + line.rstrip(), flush=True)
                 self.sse("log", {"line": line.rstrip()})
@@ -466,12 +449,10 @@ class Handler(BaseHTTPRequestHandler):
             h1 = q.get("h1", [""])[0]
             alpha = min(max(fnum(q, "alpha"), 0.0), 1.0) or 0.05
 
-            mdl.K_RISK, mdl.SIGMA = k, sigma
-            mdl.MU = mu
-            mdl.Q_MAX = 1.5 * mdl.MU
+            cfg.K_RISK, cfg.SIGMA = k, sigma
+            cfg.MU = mu
             scen = mdl.sample_scenarios(n_scen, scen_seed)
             evaluate = functools.partial(mdl.evaluate, scenarios=scen)
-            ev_ml = matheuristics.LpEvaluator(k=k, sigma=sigma, scenarios=scen) if "ml" in codes else None
             hist_grid = np.linspace(0, budget, 101).astype(int)
             milp_launch(k=k, sigma=sigma, mu=mu, n_scen=n_scen, scen_seed=scen_seed,
                         time_limit=fnum(q, "time_limit", int))
@@ -495,14 +476,7 @@ class Handler(BaseHTTPRequestHandler):
 
             for i, s in enumerate(seeds):
                 self.sse("run_start", {"seed": s, "i": i, "n": n_runs})
-                algos = []
-                for c in codes:
-                    if c == "ml":
-                        algos.append((c, ga.run_ga_iter(ev_ml.evaluate, "none", s, budget,
-                                                        repair_fn=matheuristics.repair_ml,
-                                                        n_genes=matheuristics.N_GENES_ML, **stop_kw)))
-                    else:
-                        algos.append((c, ga.run_ga_iter(evaluate, LS_METHOD[c], s, budget, **stop_kw)))
+                algos = [(c, solver.run_ga_iter(evaluate, LS_METHOD[c], s, budget, **stop_kw)) for c in codes]
                 best_seen = {c: -np.inf for c, _ in algos}
                 finished = {c: None for c, _ in algos}
                 final_state = {c: None for c, _ in algos}
@@ -522,7 +496,7 @@ class Handler(BaseHTTPRequestHandler):
                                    "runtime": st["runtime"]}
                         if st["best_f"] > best_seen[c]:
                             best_seen[c] = st["best_f"]
-                            payload["plan"] = _plan_for(c, st["best_x"], scen, ev_ml)
+                            payload["plan"] = plan_summary(st["best_x"], scen)
                             run_plan[lab] = payload["plan"]
                         self.sse("gen", payload)
                         if st["done"]:
@@ -533,10 +507,7 @@ class Handler(BaseHTTPRequestHandler):
                 for c in codes:
                     lab = FULL_LABEL[c]
                     st = final_state[c]
-                    if c == "ml":
-                        f, mp, md = ev_ml.evaluate(st["best_x"])
-                    else:
-                        f, mp, md = evaluate(st["best_x"])
+                    f, mp, md = evaluate(st["best_x"])
                     fitness[lab].append(f)
                     mean_profit[lab].append(mp)
                     mad[lab].append(md)
@@ -600,9 +571,8 @@ class Handler(BaseHTTPRequestHandler):
         except (BrokenPipeError, ConnectionResetError, ConnectionAbortedError):
             log("(trình duyệt đã dừng kiểm định)", "dim")
         finally:
-            mdl.K_RISK, mdl.SIGMA = DEFAULT_MODEL["K_RISK"], DEFAULT_MODEL["SIGMA"]
-            mdl.MU = DEFAULT_MODEL["MU"].copy()
-            mdl.Q_MAX = 1.5 * mdl.MU
+            cfg.K_RISK, cfg.SIGMA = DEFAULT_MODEL["K_RISK"], DEFAULT_MODEL["SIGMA"]
+            cfg.MU = DEFAULT_MODEL["MU"].copy()
             RUN_LOCK.release()
 
     # ------------------------------------------------------------ phân tích độ nhạy
@@ -645,23 +615,17 @@ class Handler(BaseHTTPRequestHandler):
             done = 0
             for ki, k in enumerate(k_grid):
                 for si, sigma in enumerate(sigma_grid):
-                    mdl.K_RISK = k
-                    mdl.SIGMA = sigma
-                    mdl.MU = mu
-                    mdl.Q_MAX = 1.5 * mu
+                    cfg.K_RISK = k
+                    cfg.SIGMA = sigma
+                    cfg.MU = mu
                     scen = mdl.sample_scenarios(n_scen, scen_seed)
                     evaluate = functools.partial(mdl.evaluate, scenarios=scen)
-                    ev_ml = matheuristics.LpEvaluator(k=k, sigma=sigma, scenarios=scen) if "ml" in codes else None
                     for code, lab in zip(codes, labels):
                         best_f = -np.inf
                         best_mp = best_md = 0.0
                         for r in range(sens_runs):
-                            if code == "ml":
-                                bx, _, _ = matheuristics.run_matheur(ev_ml.evaluate, seed=1 + r, budget=budget)
-                                f, mp, md = ev_ml.evaluate(bx)
-                            else:
-                                bx, _, _ = ga.run_ga(evaluate, LS_METHOD[code], seed=1 + r, budget=budget)
-                                f, mp, md = evaluate(bx)
+                            bx, _, _ = solver.run_ga(evaluate, LS_METHOD[code], seed=1 + r, budget=budget)
+                            f, mp, md = evaluate(bx)
                             if f > best_f:
                                 best_f, best_mp, best_md = f, mp, md
                         F[lab][ki, si] = best_f
@@ -697,17 +661,16 @@ class Handler(BaseHTTPRequestHandler):
         except (BrokenPipeError, ConnectionResetError, ConnectionAbortedError):
             log("(trình duyệt đã dừng phân tích)", "dim")
         finally:
-            mdl.K_RISK, mdl.SIGMA = DEFAULT_MODEL["K_RISK"], DEFAULT_MODEL["SIGMA"]
-            mdl.MU = DEFAULT_MODEL["MU"].copy()
-            mdl.Q_MAX = 1.5 * mdl.MU
+            cfg.K_RISK, cfg.SIGMA = DEFAULT_MODEL["K_RISK"], DEFAULT_MODEL["SIGMA"]
+            cfg.MU = DEFAULT_MODEL["MU"].copy()
             RUN_LOCK.release()
 
     # ------------------------------------------------------------ xuất báo cáo Excel
     def export_excel(self, q):
         if not BENCHMARK_CACHE:
             return self.send_json({"error": "Chưa có kết quả kiểm định. Hãy chạy kiểm định trước."}, 400)
-        os.makedirs(os.path.join(HERE, "output"), exist_ok=True)
-        path = os.path.join(HERE, "output", "bao_cao_kiem_dinh.xlsx")
+        os.makedirs(OUTPUT_DIR, exist_ok=True)
+        path = os.path.join(OUTPUT_DIR, "bao_cao_kiem_dinh.xlsx")
         try:
             exporter.export_single_tab_report(BENCHMARK_CACHE, SENSITIVITY_CACHE or None,
                                               BENCHMARK_CACHE.get("hypothesis", {}), path,
@@ -743,7 +706,7 @@ class Handler(BaseHTTPRequestHandler):
 
 
 def load_results():
-    out = os.path.join(HERE, "output")
+    out = OUTPUT_DIR
     res = {"available": False}
     path = os.path.join(out, "results.csv")
     if not os.path.isfile(path):

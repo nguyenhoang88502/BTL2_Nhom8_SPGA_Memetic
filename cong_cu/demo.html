@@ -95,7 +95,7 @@ button.running, button.primary.running {
 }
 
 /* Score Cards */
-.scores { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; flex-shrink: 0; }
+.scores { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; flex-shrink: 0; }
 .score { border: 1px solid #ccc; background: #fafafa; padding: 4px 6px; }
 .score .k { font-size: 10.5px; color: #333333; font-weight: bold; }
 .score .line { display: flex; align-items: baseline; gap: 8px; }
@@ -103,14 +103,14 @@ button.running, button.primary.running {
 .score .d { font-size: 10px; color: #555555; }
 .score .s { font-size: 10px; color: #666666; }
 
-/* Color coding nhất quán: SPGA xanh, GA-TS cam, GA-SA xanh lá, GA-LP tím */
+/* Color coding nhất quán: SPGA xanh, GA-TS cam, GA-SA xanh lá */
 .score.spga{border-left:3px solid #1F3A93} .score.ts{border-left:3px solid #E07B39}
-.score.sa{border-left:3px solid #2E8B57} .score.ml{border-left:3px solid #7B2FBE}
+.score.sa{border-left:3px solid #2E8B57}
 .score.spga .v{color:#1F3A93} .score.ts .v{color:#B54E12}
-.score.sa .v{color:#1E7B4A} .score.ml .v{color:#5E239D}
+.score.sa .v{color:#1E7B4A}
 .score.spga .progress-bar{background:#1F3A93} .score.ts .progress-bar{background:#E07B39}
-.score.sa .progress-bar{background:#2E8B57} .score.ml .progress-bar{background:#7B2FBE}
-th.spga{color:#1F3A93} th.ts{color:#B54E12} th.sa{color:#1E7B4A} th.ml{color:#5E239D}
+.score.sa .progress-bar{background:#2E8B57}
+th.spga{color:#1F3A93} th.ts{color:#B54E12} th.sa{color:#1E7B4A}
 
 .progress { height: 6px; border: 1px solid #767676; background: #ffffff; margin-top: 2px; flex-shrink: 0; }
 .progress-bar { height: 100%; width: 0%; background: #444444; }
@@ -145,7 +145,7 @@ th.spga{color:#1F3A93} th.ts{color:#B54E12} th.sa{color:#1E7B4A} th.ml{color:#5E
 .plot-wrapper canvas { position: absolute !important; top: 0; left: 0; width: 100% !important; height: 100% !important; }
 
 /* Plans Grid */
-.plans-grid { flex: 1; min-height: 0; display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; }
+.plans-grid { flex: 1; min-height: 0; display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; }
 .plan-item { border: 1px solid #ddd; padding: 2px; display: flex; flex-direction: column; min-height: 0; }
 .plan-item b { display: block; font-size: 10px; text-align: center; margin-bottom: 2px; flex-shrink: 0; }
 
@@ -224,7 +224,7 @@ dialog ul { margin: 2px 0; padding-left: 16px; }
 <body>
 
 <header>
-  <h1>SPGA gốc, GA-TS, GA-SA, GA-LP - Giao diện Đánh giá (Nhóm 8)</h1>
+  <h1>SPGA gốc, GA-TS, GA-SA - Giao diện Đánh giá (Nhóm 8)</h1>
   <nav class="tabs">
     <button class="tab active" id="t-single" onclick="switchTab('single')">1. Chạy đơn</button>
     <button class="tab" id="t-bench" onclick="switchTab('bench')">2. Kiểm định lặp</button>
@@ -240,7 +240,6 @@ dialog ul { margin: 2px 0; padding-left: 16px; }
       <label><input type="checkbox" name="algo" value="spga" checked>SPGA gốc</label>
       <label><input type="checkbox" name="algo" value="ts" checked>GA-TS</label>
       <label><input type="checkbox" name="algo" value="sa" checked>GA-SA</label>
-      <label><input type="checkbox" name="algo" value="ml" checked>GA-LP</label>
     </span>
     <label>Seed: <input name="seed" type="number" style="width:45px"></label>
     <label title="Nhập số tùy ý hoặc chọn gợi ý">Số lần đánh giá:
@@ -284,12 +283,6 @@ dialog ul { margin: 2px 0; padding-left: 16px; }
       <div class="s" id="sub_sa">Chưa chạy</div>
       <div class="progress"><div class="progress-bar" id="bar_sa"></div></div>
     </div>
-    <div class="score ml">
-      <div class="k">Matheuristics (GA-LP) · Z tốt nhất</div>
-      <div class="line"><span class="v" id="z_ml">–</span><span class="d" id="d_ml"></span></div>
-      <div class="s" id="sub_ml">Chưa chạy</div>
-      <div class="progress"><div class="progress-bar" id="bar_ml"></div></div>
-    </div>
   </section>
 
   <div class="main-layout">
@@ -306,7 +299,6 @@ dialog ul { margin: 2px 0; padding-left: 16px; }
           <div class="plan-item"><b>SPGA gốc</b><div class="plot-wrapper"><canvas id="cPlan_spga"></canvas></div></div>
           <div class="plan-item"><b>GA-TS</b><div class="plot-wrapper"><canvas id="cPlan_ts"></canvas></div></div>
           <div class="plan-item"><b>GA-SA</b><div class="plot-wrapper"><canvas id="cPlan_sa"></canvas></div></div>
-          <div class="plan-item"><b>GA-LP</b><div class="plot-wrapper"><canvas id="cPlan_ml"></canvas></div></div>
         </div>
       </div>
     </div>
@@ -316,7 +308,7 @@ dialog ul { margin: 2px 0; padding-left: 16px; }
         <div class="scroll-table">
           <table>
             <thead>
-              <tr><th>Chỉ số</th><th class="spga">SPGA</th><th class="ts">GA-TS</th><th class="sa">GA-SA</th><th class="ml">GA-LP</th></tr>
+              <tr><th>Chỉ số</th><th class="spga">SPGA</th><th class="ts">GA-TS</th><th class="sa">GA-SA</th></tr>
             </thead>
             <tbody id="tb"></tbody>
           </table>
@@ -358,7 +350,6 @@ dialog ul { margin: 2px 0; padding-left: 16px; }
       <label><input type="checkbox" name="algo" value="spga" checked>SPGA gốc</label>
       <label><input type="checkbox" name="algo" value="ts" checked>GA-TS</label>
       <label><input type="checkbox" name="algo" value="sa" checked>GA-SA</label>
-      <label><input type="checkbox" name="algo" value="ml" checked>GA-LP</label>
     </span>
     <button type="submit" class="primary" id="goBench">▶ Chạy Kiểm định</button>
     <button type="button" onclick="exportExcel()">📥 Xuất Excel</button>
@@ -370,7 +361,6 @@ dialog ul { margin: 2px 0; padding-left: 16px; }
       <option value="ts_vs_spga" selected>GA-TS vs SPGA gốc</option>
       <option value="sa_vs_spga">GA-SA vs SPGA gốc</option>
       <option value="ts_vs_sa">GA-TS vs GA-SA</option>
-      <option value="ml_vs_spga">Matheuristics (GA-LP) vs SPGA gốc</option>
     </select>
     <input id="h0_input" type="text" style="flex:1" placeholder="H₀: Giả thuyết Không">
     <input id="h1_input" type="text" style="flex:1" placeholder="H₁: Giả thuyết Thay thế">
@@ -478,14 +468,8 @@ dialog ul { margin: 2px 0; padding-left: 16px; }
     <li>T0 ước lượng một lần từ 30 bước ngẫu nhiên, sao cho bước tệ điển hình được nhận 50% lúc đầu. 30 lần này tính vào ngân sách.</li>
     <li>Làm nguội theo cấp số nhân, đến lần đánh giá cuối thì T = 0,01·T0.</li>
   </ul>
-  <h3>Matheuristics (GA-LP): GA + LP</h3>
-  <ul>
-    <li>Phân rã bài toán: GA chỉ tìm phương án máy (63 gen: mua tester/handler, thuê theo quý), không chứa gen sản lượng.</li>
-    <li>Mỗi lần đánh giá, LP (HiGHS) tối ưu phân bổ sản lượng Q* cho đúng phương án máy đó — fitness là Z chính xác của phương án.</li>
-    <li>Mọi phương án máy đều khả thi nên không cần bước sửa nghiệm (repair).</li>
-  </ul>
   <h3>So sánh công bằng</h3>
-  <p>Bốn thuật toán dùng chung ngân sách đánh giá (mỗi lần đánh giá của GA-LP = 1 lần giải LP), 30 kịch bản và các seed giống nhau. GA-TS và GA-SA cùng kích hoạt mỗi 10 thế hệ cho 3 cá thể tốt nhất, tối đa 20 lần đánh giá mỗi cá thể, cùng 174 bước lân cận, và cùng ghi vào quần thể nghiệm tốt nhất gặp được nên không bao giờ làm tệ cá thể.</p>
+  <p>Ba thuật toán dùng chung ngân sách đánh giá, 30 kịch bản và các seed giống nhau. GA-TS và GA-SA cùng kích hoạt mỗi 10 thế hệ cho 3 cá thể tốt nhất, tối đa 20 lần đánh giá mỗi cá thể, cùng 174 bước lân cận, và cùng ghi vào quần thể nghiệm tốt nhất gặp được nên không bao giờ làm tệ cá thể.</p>
   <div style="text-align:right; margin-top:8px;">
     <button class="close" type="button">Đóng</button>
   </div>
@@ -494,16 +478,16 @@ dialog ul { margin: 2px 0; padding-left: 16px; }
 <script>
 "use strict";
 // ------------------------------------------------------------- color coding nhất quán + nét vẽ từng thuật toán
-// SPGA xanh, GA-TS cam, GA-SA xanh lá, GA-LP tím; MILP vàng sẫm nét đứt
+// SPGA xanh, GA-TS cam, GA-SA xanh lá; MILP vàng sẫm nét đứt
 const C = {spga:"#1F3A93", spgaSoft:"#8FA3D9", ts:"#E07B39", tsSoft:"#F2B48A",
-  sa:"#2E8B57", saSoft:"#9CCFB2", ml:"#7B2FBE", mlSoft:"#C9A6E8",
+  sa:"#2E8B57", saSoft:"#9CCFB2",
   grid:"#e0e0e0", ink:"#000000", muted:"#555555", milp:"#B8860B"};
-const INK = {spga:"#1F3A93", ts:"#B54E12", sa:"#1E7B4A", ml:"#5E239D"};
-const DASH = {spga:[], ts:[4,3], sa:[2,2], ml:[6,2]};
-const NAME = {spga:"SPGA", ts:"GA-TS", sa:"GA-SA", ml:"GA-LP"};
-const ALGOS = ["spga","ts","sa","ml"];
-const LABEL = {spga:"SPGA gốc", ts:"GA-TS", sa:"GA-SA", ml:"Matheuristics (GA-LP)"};
-const CODE = {"SPGA gốc":"spga", "GA-TS":"ts", "GA-SA":"sa", "Matheuristics (GA-LP)":"ml"};
+const INK = {spga:"#1F3A93", ts:"#B54E12", sa:"#1E7B4A"};
+const DASH = {spga:[], ts:[4,3], sa:[2,2]};
+const NAME = {spga:"SPGA", ts:"GA-TS", sa:"GA-SA"};
+const ALGOS = ["spga","ts","sa"];
+const LABEL = {spga:"SPGA gốc", ts:"GA-TS", sa:"GA-SA"};
+const CODE = {"SPGA gốc":"spga", "GA-TS":"ts", "GA-SA":"sa"};
 const PARAMS = ["seed","budget","stopping","time_limit_sec","k","sigma","ls_freq","ls_top","ls_max","ts_n_cand","ts_tenure","sa_p0"];
 const $ = s => document.querySelector(s);
 const fmt = (v, d=2) => (v==null||!isFinite(v)) ? "–" : v.toLocaleString("vi-VN",{minimumFractionDigits:d,maximumFractionDigits:d});
@@ -660,7 +644,7 @@ function updateScores(){
     const prog = stopping === "time" ? (st.runtime ?? 0) / timeLimit : st.evals / budget;
     $("#bar_"+a).style.width = on ? Math.min(100,100*prog)+"%" : "0%";
   }
-  for (const a of ["ts","sa","ml"]){
+  for (const a of ["ts","sa"]){
     const el = $("#d_"+a); el.textContent = "";
     if (!S.algos.includes(a) || !S.algos.includes("spga")) continue;
     const n = Math.min(S.a.spga.evals, S.a[a].evals), fa = bestAtEvals(S.a.spga,n), fb = bestAtEvals(S.a[a],n);
@@ -739,7 +723,7 @@ function start(){
   $("#convTitle").textContent = "Hội tụ của lần chạy này";
   $("#convHint").textContent = "Đường càng cao càng tốt. Đường nét đứt xám là cận tối ưu toàn cục MILP.";
   $("#feed").innerHTML = '<li class="hint" style="padding:4px">Đang chờ lần tìm kiếm cục bộ đầu tiên…</li>';
-  S = {algos:[], a:{spga:freshAlgo(), ts:freshAlgo(), sa:freshAlgo(), ml:freshAlgo()},
+  S = {algos:[], a:{spga:freshAlgo(), ts:freshAlgo(), sa:freshAlgo()},
        k:+q.get("k"), sigma:+q.get("sigma"), milp:null};
   running(true); renderTable(); renderStatLine(); redraw();
   es = new EventSource("/api/run?"+q.toString());
@@ -797,9 +781,6 @@ function applyHypoPreset(){
   } else if (val === "ts_vs_sa"){
     h0.value = "GA-TS có hiệu năng Z trung bình không khác biệt so với GA-SA";
     h1.value = "GA-TS có hiệu năng Z trung bình vượt trội hơn GA-SA có ý nghĩa thống kê";
-  } else if (val === "ml_vs_spga"){
-    h0.value = "Matheuristics (GA-LP) có hiệu năng Z trung bình không khác biệt so với SPGA gốc";
-    h1.value = "Matheuristics (GA-LP) có hiệu năng Z trung bình vượt trội hơn SPGA gốc có ý nghĩa thống kê";
   }
 }
 
@@ -1139,7 +1120,7 @@ new ResizeObserver(redrawAll).observe(document.body);
   budget = defaults.budget;
   applyHypoPreset();
   try { RES = await (await fetch("/api/results")).json(); } catch(e){ RES = null; }
-  if (RES?.curves){ $("#convTitle").textContent = "Hội tụ trung bình của thực nghiệm đã lưu"; $("#convHint").textContent = "Bấm ▶ Chạy để xem bốn thuật toán chạy trực tiếp."; }
+  if (RES?.curves){ $("#convTitle").textContent = "Hội tụ trung bình của thực nghiệm đã lưu"; $("#convHint").textContent = "Bấm ▶ Chạy để xem ba thuật toán chạy trực tiếp."; }
   renderStatLine(); renderTable(); redraw();
 })();
 </script>

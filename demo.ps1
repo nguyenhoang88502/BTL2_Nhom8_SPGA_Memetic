@@ -71,11 +71,11 @@ if (-not (Test-PythonModule "numpy")) {
 }
 $missing = @("scipy", "pandas", "matplotlib" | Where-Object { -not (Test-PythonModule $_) })
 if ($missing.Count -gt 0) {
-    Write-Line "[2/3] Đang cài thêm $($missing -join ', ') (cho nút 'Chạy lại main.py')..." Yellow
+    Write-Line "[2/3] Đang cài thêm $($missing -join ', ') (cho nút 'Chạy lại thực nghiệm' trên demo)..." Yellow
     & $PythonExe -m pip install --user --disable-pip-version-check @missing
     $still = @($missing | Where-Object { -not (Test-PythonModule $_) })
     if ($still.Count -gt 0) {
-        Write-Line "      Cảnh báo: thiếu $($still -join ', ') -> demo vẫn chạy, chỉ nút 'Chạy lại main.py' không dùng được." DarkYellow
+        Write-Line "      Cảnh báo: thiếu $($still -join ', ') -> demo vẫn chạy, chỉ nút 'Chạy lại thực nghiệm' không dùng được." DarkYellow
     }
 }
 Write-Line "[2/3] Thư viện OK" Green
@@ -100,7 +100,7 @@ while (-not (Test-PortFree $port)) {
 $url = "http://localhost:$port"
 
 # Cùng cửa sổ console (-NoNewWindow) để log có màu của server hiện ra ở đây.
-$server = Start-Process -FilePath $PythonExe -ArgumentList @("-u", "demo_server.py", "--port", "$port") `
+$server = Start-Process -FilePath $PythonExe -ArgumentList @("-u", "cong_cu\demo_server.py", "--port", "$port") `
     -WorkingDirectory $PSScriptRoot -NoNewWindow -PassThru
 try {
     # Server chỉ nghe ở 127.0.0.1, còn Invoke-WebRequest tới localhost thử ::1 trước và mất khoảng 2 giây,
@@ -130,7 +130,7 @@ try {
     Read-Host | Out-Null
 }
 finally {
-    # /T: tắt cả tiến trình con (main.py khi đang chạy lại từ trình duyệt).
+    # /T: tắt cả tiến trình con (cong_cu/main.py khi đang chạy lại từ trình duyệt).
     if (-not $server.HasExited) { & taskkill.exe /PID $server.Id /T /F 2>$null | Out-Null }
     Write-Line "Đã tắt demo." DarkGray
 }
