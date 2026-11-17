@@ -64,7 +64,7 @@ Các lệnh chạy được từ bất kỳ thư mục nào; kết quả luôn g
 | `results.csv` | 30 dòng (3 thuật toán × 10 seed): fitness, lợi nhuận TB, MAD, thời gian, số lần evaluate để hội tụ, fitness trên 1000 kịch bản kiểm tra, thống kê tìm kiếm cục bộ |
 | `summary.csv` | Trung bình, độ lệch chuẩn, min, max theo thuật toán |
 | `stats.txt` | Friedman, Wilcoxon hai phía theo cặp hiệu chỉnh Holm, số seed thắng |
-| `history.csv` | Fitness tốt nhất theo số lần gọi evaluate (vẽ biểu đồ hội tụ) |
+| `history.csv` | Fitness tốt nhất theo số lần gọi evaluate (vẽ biểu đồ hội tụ). Bản trong repo là seed 1–10; bản 100 seed khoảng 51 MB nên không đưa lên |
 | `ablation.csv`, `fig_ablation.png` | TS với n_cand ∈ {3, 5, 10} và tenure ∈ {3, 7, 15}; tabu chung và riêng; SA với xác suất nhận ban đầu ∈ {0.2, 0.5, 0.8}; hill climbing cũ |
 | `best_portfolio.csv`, `best_allocation.csv` | Danh mục máy và phân bổ sản lượng của nghiệm tốt nhất (giống Bảng 1 bài báo) |
 | `fig_convergence.png`, `fig_boxplot.png` | Biểu đồ hội tụ (dải ±1 độ lệch chuẩn) và boxplot |

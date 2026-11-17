@@ -6,6 +6,7 @@ config.py (số liệu), model.py (bài toán), solver.py (thuật toán). Số 
 
     python cong_cu/main.py            # thí nghiệm chính + ablation
     python cong_cu/main.py --quick    # chỉ thí nghiệm chính
+    python cong_cu/main.py --quick --seeds 100   # thí nghiệm chính với seed 1..100 (khoảng 17 phút)
     python cong_cu/main.py --stopping time --time-limit 180   # dừng theo thời gian thực
 
 Đầu ra (thư mục output/ ở thư mục gốc, bất kể chạy lệnh từ đâu):
@@ -17,7 +18,7 @@ config.py (số liệu), model.py (bài toán), solver.py (thuật toán). Số 
     best_portfolio.csv     danh mục máy của nghiệm tốt nhất (giống Bảng 1 bài báo)
     fig_convergence.png    biểu đồ hội tụ trung bình, dải ±1 độ lệch chuẩn (theo evaluate)
     fig_convergence_time.png  biểu đồ hội tụ Z_best theo thời gian thực (giây)
-    fig_boxplot.png        boxplot fitness 10 lần chạy
+    fig_boxplot.png        boxplot fitness các lần chạy (mỗi seed một lần)
     ablation.csv           các biến thể của TS và SA, cùng hill climbing cũ
     fig_ablation.png       biểu đồ ablation
 """
@@ -100,13 +101,14 @@ def write_stats(df):
     wil = [stats.wilcoxon(z[a], z[b], alternative="two-sided") for a, b in PAIRS]
     adjusted = holm([w.pvalue for w in wil])
     best_each_seed = np.argmax(np.array(list(z.values())), axis=0)
+    n = len(z[BASE])
     with open(f"{OUT}/stats.txt", "w", encoding="utf-8") as fh:
-        fh.write(f"Friedman (3 thuat toan, 10 seed): chi2={fr.statistic:.3f}, p={fr.pvalue:.5f}\n")
+        fh.write(f"Friedman (3 thuat toan, {n} seed): chi2={fr.statistic:.3f}, p={fr.pvalue:.4g}\n")
         for (a, b), w, p in zip(PAIRS, wil, adjusted):
-            fh.write(f"Wilcoxon {a} vs {b}: stat={w.statistic:.1f}, p={w.pvalue:.5f}, p_Holm={p:.5f}, "
-                     f"{a} thang {int((z[a] > z[b]).sum())}/10 seed\n")
+            fh.write(f"Wilcoxon {a} vs {b}: stat={w.statistic:.1f}, p={w.pvalue:.4g}, p_Holm={p:.4g}, "
+                     f"{a} thang {int((z[a] > z[b]).sum())}/{n} seed\n")
         for i, alg in enumerate(z):
-            fh.write(f"So seed co Z cao nhat ca 3: {alg} = {int((best_each_seed == i).sum())}/10\n")
+            fh.write(f"So seed co Z cao nhat ca 3: {alg} = {int((best_each_seed == i).sum())}/{n}\n")
         for alg in (TS, SA):
             fh.write(f"Cai thien Z trung binh so voi {BASE}: {alg} = {(z[alg].mean() / z[BASE].mean() - 1) * 100:+.3f}%\n")
     print(open(f"{OUT}/stats.txt", encoding="utf-8").read())
@@ -123,7 +125,7 @@ def plot_main(df, all_hist):
             curves.append(f[np.searchsorted(n, grid, side="right") - 1])
         curves = np.array(curves) / 1e6
         mean, std = curves.mean(0), curves.std(0, ddof=1)
-        ax.plot(grid, mean, color=COLORS[alg], lw=2, label=f"{alg} (trung bình 10 lần)")
+        ax.plot(grid, mean, color=COLORS[alg], lw=2, label=f"{alg} (trung bình {len(hs)} lần)")
         ax.fill_between(grid, mean - std, mean + std, color=COLORS[alg], alpha=0.15)
     ax.set_xlabel("Số lần gọi evaluate")
     ax.set_ylabel("Fitness tốt nhất (triệu), dải ±1 độ lệch chuẩn")
@@ -221,7 +223,8 @@ def run_ablation(df, evaluate, evaluate_test):
     fig.tight_layout(); fig.savefig(f"{OUT}/fig_ablation.png"); plt.close(fig)
 
 
-def main(quick=False, stopping="evaluations", time_limit=None):
+def main(quick=False, stopping="evaluations", time_limit=None, seeds=None):
+    seeds = list(cfg.SEEDS if seeds is None else seeds)
     started = time.perf_counter()
     os.makedirs(OUT, exist_ok=True)
     scen = mdl.sample_scenarios(cfg.N_SCEN, cfg.SCEN_SEED)
@@ -238,7 +241,7 @@ def main(quick=False, stopping="evaluations", time_limit=None):
     # ---------------------------------------------------- thí nghiệm chính
     all_rows, all_hist, all_time_hist = [], {}, {}
     for method, label in LABEL.items():
-        rows, hists = run_set(evaluate, method, cfg.SEEDS, **stop_kw)
+        rows, hists = run_set(evaluate, method, seeds, **stop_kw)
         th = {}
         for r in rows:
             r["algorithm"] = label
@@ -320,7 +323,10 @@ def main(quick=False, stopping="evaluations", time_limit=None):
     print(f"Thí nghiệm chính: {time.perf_counter() - started:.1f} giây", flush=True)
 
     if not quick:
-        run_ablation(df, evaluate, evaluate_test)
+        if seeds != list(cfg.SEEDS):
+            print("Bỏ qua ablation: ablation dùng cfg.SEEDS, khác danh sách seed vừa chạy.")
+        else:
+            run_ablation(df, evaluate, evaluate_test)
     print(f"Tổng thời gian: {time.perf_counter() - started:.1f} giây")
 
 
@@ -331,5 +337,8 @@ if __name__ == "__main__":
                     help="Điều kiện dừng: theo ngân sách đánh giá (mặc định) hoặc theo thời gian thực")
     ap.add_argument("--time-limit", type=float, default=cfg.TIME_LIMIT_SEC,
                     help="Giới hạn thời gian thực (giây) khi --stopping time")
+    ap.add_argument("--seeds", type=int, default=None,
+                    help="Chạy seed 1..N thay cho cfg.SEEDS (vd. --seeds 100)")
     a = ap.parse_args()
-    main(quick=a.quick, stopping=a.stopping, time_limit=a.time_limit)
+    main(quick=a.quick, stopping=a.stopping, time_limit=a.time_limit,
+         seeds=range(1, a.seeds + 1) if a.seeds else None)
